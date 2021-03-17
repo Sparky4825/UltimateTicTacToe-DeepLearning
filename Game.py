@@ -15,21 +15,21 @@ class Game():
         """
         Returns:
             startBoard: a representation of the board (ideally this is the form
-                        that will be the input to your neural network)
+                        that will be the input to your neural network) - np array
         """
         pass
 
     def getBoardSize(self):
         """
         Returns:
-            (x,y): a tuple of board dimensions
+            (x,y): a tuple of board dimensions - (9, 9)
         """
         pass
 
     def getActionSize(self):
         """
         Returns:
-            actionSize: number of all possible actions
+            actionSize: number of all possible actions - 81
         """
         pass
 
@@ -41,7 +41,7 @@ class Game():
             action: action taken by current player
 
         Returns:
-            nextBoard: board after applying action
+            nextBoard: board after applying action - np array
             nextPlayer: player who plays in the next turn (should be -player)
         """
         pass
@@ -55,7 +55,7 @@ class Game():
         Returns:
             validMoves: a binary vector of length self.getActionSize(), 1 for
                         moves that are valid from the current board and player,
-                        0 for invalid moves
+                        0 for invalid moves - np array
         """
         pass
 
@@ -84,7 +84,7 @@ class Game():
                             the canonical form can be chosen to be from the pov
                             of white. When the player is white, we can return
                             board as is. When the player is black, we can invert
-                            the colors and return the board.
+                            the colors and return the board. - np array
         """
         pass
 

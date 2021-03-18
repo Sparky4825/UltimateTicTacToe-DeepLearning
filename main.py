@@ -3,8 +3,10 @@ import logging
 import coloredlogs
 
 from Coach import Coach
-from tictactoe.TicTacToeGame import TicTacToeGame as Game
-from tictactoe.keras.NNet import NNetWrapper as nn
+
+from UltimateTicTacToe import UltimateTicTacToeGame as UTicTacToe
+from UltimateTicTacToe.keras.NNet import NNetWrapper as nn
+
 from utils import *
 
 log = logging.getLogger(__name__)
@@ -13,7 +15,7 @@ coloredlogs.install(level='INFO')  # Change this to DEBUG to see more info.
 
 args = dotdict({
     'numIters': 1000,
-    'numEps': 20,              # Number of complete self-play games to simulate during a new iteration.
+    'numEps': 5,              # Number of complete self-play games to simulate during a new iteration.
     'tempThreshold': 15,        #
     'updateThreshold': 0.6,     # During arena playoff, new neural net will be accepted if threshold or more of games are won.
     'maxlenOfQueue': 200000,    # Number of game examples to train the neural networks.
@@ -25,7 +27,7 @@ args = dotdict({
     # 'load_model': False,
     # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
 
-    'load_model': True,
+    'load_model': False,
     'load_folder_file': ('./temp/','best.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
 
@@ -33,8 +35,8 @@ args = dotdict({
 
 
 def main():
-    log.info('Loading %s...', Game.__name__)
-    g = Game(3)
+    log.info('Loading %s...', UTicTacToe.TicTacToeGame.__name__)
+    g = UTicTacToe.TicTacToeGame()
 
     log.info('Loading %s...', nn.__name__)
     nnet = nn(g)

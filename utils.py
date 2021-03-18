@@ -18,5 +18,12 @@ class AverageMeter(object):
 
 
 class dotdict(dict):
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+
+
     def __getattr__(self, name):
         return self[name]

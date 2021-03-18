@@ -11,7 +11,9 @@ from utils import *
 from NeuralNet import NeuralNet
 
 import argparse
-from .TicTacToeNNet import TicTacToeNNet as onnet
+from .TicTacToeNNet import get_model
+
+import ray
 
 """
 NeuralNet wrapper class for the TicTacToeNNet.
@@ -25,15 +27,17 @@ Based on (copy-pasted from) the NNet by SourKream and Surag Nair.
 args = dotdict({
     'lr': 0.001,
     'dropout': 0.3,
-    'epochs': 50,
+    'epochs': 10,
     'batch_size': 64,
     'cuda': True,
     'num_channels': 512,
 })
 
+
+@ray.remote(num_gpus=0.5)
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
-        self.nnet = onnet(game, args)
+        self.nnet = get_model(game, args)
         self.board_x, self.board_y, self.board_z = game.getBoardSize()
         self.action_size = game.getActionSize()
 
@@ -45,22 +49,24 @@ class NNetWrapper(NeuralNet):
         input_boards = np.asarray(input_boards)
         target_pis = np.asarray(target_pis)
         target_vs = np.asarray(target_vs)
-        self.nnet.model.fit(x = input_boards, y = [target_pis, target_vs], batch_size = args.batch_size, epochs = args.epochs)
+        self.nnet.fit(x = input_boards, y = [target_pis, target_vs], batch_size = args.batch_size, epochs = args.epochs)
 
     def predict(self, board):
         """
         board: np array with board
         """
-        # timing
-        start = time.time()
+
 
         # preparing input
         board = board[np.newaxis, :, :]
 
-        # run
-        pi, v = self.nnet.model.predict(board)
+        # timing
+        start = time.time()
 
-        #print('PREDICTION TIME TAKEN : {0:03f}'.format(time.time()-start))
+        # run
+        pi, v = self.nnet.predict(board)
+
+        print('PREDICTION TIME TAKEN : {0:03f}'.format(time.time()-start))
         return pi[0], v[0]
 
     def save_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
@@ -70,11 +76,11 @@ class NNetWrapper(NeuralNet):
             os.mkdir(folder)
         else:
             print("Checkpoint Directory exists! ")
-        self.nnet.model.save_weights(filepath)
+        self.nnet.save_weights(filepath)
 
     def load_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
         # https://github.com/pytorch/examples/blob/master/imagenet/main.py#L98
         filepath = os.path.join(folder, filename)
         # if not os.path.exists(filepath):
         #     raise FileNotFoundError("No model in path '{}'".format(filepath))
-        self.nnet.model.load_weights(filepath)
+        self.nnet.load_weights(filepath)

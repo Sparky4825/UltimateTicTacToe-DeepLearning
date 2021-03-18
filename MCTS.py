@@ -2,6 +2,7 @@ import logging
 import math
 
 import numpy as np
+import ray
 
 EPS = 1e-8
 
@@ -15,7 +16,7 @@ class MCTS():
 
     def __init__(self, game, nnet, args):
         self.game = game
-        self.nnet = nnet
+        self.nnet = nnet  # Reference to ray actor responsible for NN
         self.args = args
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}  # stores #times edge s,a was visited
@@ -82,7 +83,7 @@ class MCTS():
 
         if s not in self.Ps:
             # leaf node
-            self.Ps[s], v = self.nnet.predict(canonicalBoard)
+            self.Ps[s], v = ray.get(self.nnet.predict.remote(canonicalBoard))
             valids = self.game.getValidMoves(canonicalBoard, 1)
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])

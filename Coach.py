@@ -274,6 +274,10 @@ class Coach:
                     f"Self-games complete with {len(iterationTrainExamples)} positions to train from"
                 )
 
+                # Kill the workers because they are no longer needed
+                for worker in workers:
+                    ray.kill(worker)
+
                 # save the iteration examples to the history
                 self.trainExamplesHistory.append(iterationTrainExamples)
 
@@ -307,6 +311,7 @@ class Coach:
             # pmcts = MCTS(self.game, self.pnet, self.args)
 
             ray.get(self.nnet.train.remote(trainExamples))
+            log.info("Training has been completed")
             # nmcts = MCTS(self.game, self.nnet, self.args)
 
             # log.info('PITTING AGAINST PREVIOUS VERSION')

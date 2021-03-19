@@ -70,8 +70,6 @@ class NNetWrapper(NeuralNet):
 
         coloredlogs.install(level="INFO", logger=self.log)
 
-        asyncio.create_task(self.prediction_timer())
-
     def get_batch_size(self):
         return self.args.batch_size
 
@@ -90,92 +88,26 @@ class NNetWrapper(NeuralNet):
             epochs=args.epochs,
         )
 
-    async def request_prediction(self, board):
-        """
-        board: np array with board
-        """
-
-        self.log.debug("Prediction requested")
-        self.log.debug(f"Board: {board}")
-
-        # Limit number of concurrent threads
-        async with self.sem:
-
-            # Update the timer every time a new prediction is requested
-            self.last_prediction_time = time.time()
-
-            # If waiting for other processes to claim their results, it must wait
-            if self.run_evaluation.is_set():
-                self.log.info(
-                    "Waiting for another process to claim results to add prediction"
-                )
-                self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
-                await self.claim_evaluation.wait()
-
-            # preparing input
-            # board = board[np.newaxis, :, :]
-
-            # Add the board to the list of predictions to be made
-            self.pending_evaluations = np.append(
-                self.pending_evaluations, board[np.newaxis, :, :], axis=0
-            )
-
-            # Save the board index to remember which results go with this board after predictions are calculated
-            board_index = len(self.pending_evaluations) - 1
-
-            # Check if its time to run a batch
-            if len(self.pending_evaluations) >= args.batch_size:
-                # Run the batch
-                self.predict()
-
-            else:
-                # Wait until the predictions have been made
-                await self.run_evaluation.wait()
-
-            # Get and return the results
-            self.log.debug(f"Prediction results: {self.prediction_results}")
-            pi, v = (
-                self.prediction_results[0][board_index],
-                self.prediction_results[1][board_index],
-            )
-            self.unclaimed_results[board_index] = 0
-
-            # Check if all the results have been claimed
-            if not np.any(self.unclaimed_results):
-
-                # If they have, allow the next set of boards to be setup
-                self.claim_evaluation.set()
-                self.run_evaluation.clear()
-
-            return pi, v
-
-    def predict(self):
+    def predict(self, board):
         """
         Runs all of the pending predictions
         """
 
         self.log.info(
-            f"Starting predictions - last prediction was {time.time() - self.last_prediction_time} secs ago"
+            f"Starting single prediction - last prediction was {time.time() - self.last_prediction_time} secs ago"
         )
+
+        board = board[np.newaxis, :, :, :]
 
         # timing
         start = time.time()
 
         # run
-        self.prediction_results = self.nnet.predict(self.pending_evaluations)
+        self.prediction_results = self.nnet.predict(board)
 
-        self.log.info("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
-        self.log.info(f"PREDICTIONS MADE: {len(self.pending_evaluations)}")
-
-        # Clear out the old boards
-        self.pending_evaluations = np.empty((0, 3, 9, 10))
-
-        # Add the boards need to be claimed
-        self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
-
-        # Tell the awaiting functions that the batch has been processed and they need to claim results
-        self.claim_evaluation.clear()
-        self.run_evaluation.set()
+        self.log.debug(
+            "SINGLE PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start)
+        )
 
         self.last_prediction_time = time.time()
 
@@ -184,7 +116,7 @@ class NNetWrapper(NeuralNet):
         The Neural Network is more efficient running on a batch,
         so run a batch of predictions at once.
         """
-        self.log.info("Starting prediction batch")
+        self.log.debug("Starting prediction batch")
 
         # timing
         start = time.time()
@@ -192,37 +124,10 @@ class NNetWrapper(NeuralNet):
         # run
         prediction_results = self.nnet.predict(batch)
 
-        self.log.info("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
-        self.log.info(f"PREDICTIONS MADE: {len(batch)}")
+        self.log.debug("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
+        self.log.debug(f"PREDICTIONS MADE: {len(batch)}")
 
         return prediction_results
-
-    async def prediction_timer(self):
-        """
-        Checks every second to see if the prediction timer
-        has run out and a prediction needs to be run, despite
-        not having a full batch
-        :return:
-        """
-
-        self.log.info("PREDICTION TIMER STARTED")
-
-        self.prediction_timer_running = True
-
-        while self.prediction_timer_running:
-            self.log.debug("Checking if prediction is needed")
-            if (
-                time.time() > self.last_prediction_time + 2
-                and len(self.pending_evaluations) > 0
-            ):
-                self.log.info("Prediction is needed")
-                self.predict()
-
-            else:
-                self.log.debug(
-                    f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
-                )
-                await asyncio.sleep(2)
 
     def save_checkpoint(self, folder="checkpoint", filename="checkpoint.pth.tar"):
         filepath = os.path.join(folder, filename)

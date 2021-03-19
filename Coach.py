@@ -52,7 +52,7 @@ class ExecuteEpisodeActor:
         asyncio.create_task(self.prediction_timer())
 
     def run_batch(self):
-        self.log.info("Requesting batch prediction")
+        self.log.debug("Requesting batch prediction")
         self.prediction_results = ray.get(
             self.nnet_actor.predict_batch.remote(self.pending_evaluations)
         )
@@ -209,6 +209,9 @@ class ExecuteEpisodeActor:
 
             if r != 0:
                 print("GAME COMPLETE")
+                self.batch_size -= (
+                    1  # No longer wait for this game to be present in batch
+                )
                 return [
                     (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
                     for x in trainExamples
@@ -265,7 +268,11 @@ class Coach:
                 ):
                     # Run the episodes at once
                     for trainingPositions in poolResult:
-                        iterationTrainExamples += trainingPositions
+                        log.info(f"New training positions {len(trainingPositions)}")
+                        iterationTrainExamples.extend(trainingPositions)
+                log.info(
+                    f"Self-games complete with {len(iterationTrainExamples)} positions to train from"
+                )
 
                 # save the iteration examples to the history
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -287,6 +294,8 @@ class Coach:
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
             shuffle(trainExamples)
+
+            log.info(f"About to begin training with {len(trainExamples)} samples")
 
             # training new network, keeping a copy of the old one
             ray.get(

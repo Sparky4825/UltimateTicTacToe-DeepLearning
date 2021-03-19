@@ -33,20 +33,6 @@ class MCTS:
 
         self.batch_size = ray.get(self.nnet.get_batch_size.remote())
 
-        # Allow enough concurrent processes to fill the batch
-        self.sem = asyncio.Semaphore(self.batch_size + 5)
-
-        self.prediction_timer_running = False
-        self.last_prediction_time = time.time()
-
-        self.run_evaluation = asyncio.Event()
-        self.claim_evaluation = asyncio.Event()
-
-        self.prediction_results = None
-        self.unclaimed_results = None
-
-        self.pending_evaluations = np.empty((0, 3, 9, 10))
-
         self.log = logging.getLogger(self.__class__.__name__)
 
         coloredlogs.install(level="INFO", logger=self.log)
@@ -80,116 +66,6 @@ class MCTS:
         counts_sum = float(sum(counts))
         probs = [x / counts_sum for x in counts]
         return probs
-
-    def run_batch(self):
-        self.log.info("Requesting batch prediction")
-        self.prediction_results = ray.get(
-            self.nnet.predict_batch.remote(self.pending_evaluations)
-        )
-
-        # Clear out the old boards
-        self.pending_evaluations = np.empty((0, 3, 9, 10))
-
-        # Add the boards need to be claimed
-        self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
-
-        # Tell the awaiting functions that the batch has been processed and they need to claim results
-        self.claim_evaluation.clear()
-        self.run_evaluation.set()
-
-        self.last_prediction_time = time.time()
-
-    async def request_prediction(self, board):
-        """
-        Adds the given board to be evaluated on the GPU with the next batch.
-        Then it awaits for the result.
-        :param board:
-        :return:
-        """
-
-        self.log.info(f"Requesting prediction {len(self.pending_evaluations)}")
-        self.log.info(board)
-
-        async with self.sem:
-            self.log.info("enteirng losfod==========================================")
-            self.log.info(self.pending_evaluations)
-            # Update the timer every time a new prediction is requested
-            self.last_prediction_time = time.time()
-
-            if self.run_evaluation.is_set():
-                self.log.info(
-                    "Waiting for another process to claim results to add prediction"
-                )
-                self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
-                await self.claim_evaluation.wait()
-
-            # Add the board to the list of predictions to be made
-            self.pending_evaluations = np.append(
-                self.pending_evaluations, board[np.newaxis, :, :], axis=0
-            )
-
-            self.log.info(self.pending_evaluations)
-            self.log.info(
-                np.append(self.pending_evaluations, board[np.newaxis, :, :], axis=0)
-            )
-
-            self.log.info("enteirng losfod==========================================")
-            self.log.info("enteirng losfod==========================================")
-
-            # Save the board index locally to remember which results go with this board after predictions are calculated
-            board_index = len(self.pending_evaluations) - 1
-
-            # Check if its time to run a batch
-            if len(self.pending_evaluations) >= self.batch_size:
-                self.run_batch()
-
-            else:
-                # Wait until the predictions have been made
-                await self.run_evaluation.wait()
-
-            # Get and return the results
-            self.log.debug(f"Prediction results: {self.prediction_results}")
-            pi, v = (
-                self.prediction_results[0][board_index],
-                self.prediction_results[1][board_index],
-            )
-            self.unclaimed_results[board_index] = 0
-
-            # Check if all the results have been claimed
-            if not np.any(self.unclaimed_results):
-
-                # If they have, allow the next set of boards to be setup
-                self.claim_evaluation.set()
-                self.run_evaluation.clear()
-
-            return pi, v
-
-    async def prediction_timer(self):
-        """
-        Checks every second to see if the prediction timer
-        has run out and a prediction needs to be run, despite
-        not having a full batch
-        :return:
-        """
-
-        self.log.info("PREDICTION TIMER STARTED")
-
-        self.prediction_timer_running = True
-
-        while self.prediction_timer_running:
-            self.log.debug("Checking if prediction is needed")
-            if (
-                time.time() > self.last_prediction_time + 2
-                and len(self.pending_evaluations) > 0
-            ):
-                self.log.info("Prediction is needed")
-                self.run_batch()
-
-            else:
-                self.log.debug(
-                    f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
-                )
-                await asyncio.sleep(2)
 
     async def search(self, canonicalBoard):
         """

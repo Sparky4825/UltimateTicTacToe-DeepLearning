@@ -49,6 +49,7 @@ args = dotdict(
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
         self.nnet = get_model(game, args)
+        self.args = args
         self.board_x, self.board_y, self.board_z = game.getBoardSize()
         self.action_size = game.getActionSize()
 
@@ -70,6 +71,9 @@ class NNetWrapper(NeuralNet):
         coloredlogs.install(level="INFO", logger=self.log)
 
         asyncio.create_task(self.prediction_timer())
+
+    def get_batch_size(self):
+        return self.args.batch_size
 
     def train(self, examples):
         """
@@ -99,8 +103,6 @@ class NNetWrapper(NeuralNet):
 
             # Update the timer every time a new prediction is requested
             self.last_prediction_time = time.time()
-
-            # TODO: ensure that all of the results have been returned before running another prediction, else they will be lost
 
             # If waiting for other processes to claim their results, it must wait
             if self.run_evaluation.is_set():
@@ -176,6 +178,24 @@ class NNetWrapper(NeuralNet):
         self.run_evaluation.set()
 
         self.last_prediction_time = time.time()
+
+    def predict_batch(self, batch):
+        """
+        The Neural Network is more efficient running on a batch,
+        so run a batch of predictions at once.
+        """
+        self.log.info("Starting prediction batch")
+
+        # timing
+        start = time.time()
+
+        # run
+        prediction_results = self.nnet.predict(batch)
+
+        self.log.info("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
+        self.log.info(f"PREDICTIONS MADE: {len(batch)}")
+
+        return prediction_results
 
     async def prediction_timer(self):
         """

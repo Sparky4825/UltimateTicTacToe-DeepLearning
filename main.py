@@ -31,6 +31,7 @@ args = dotdict(
         "load_folder_file": ("./temp/", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
         "numCPUForMCTS": 8,  # The number of Ray actors to use to add boards to be predicted.
+        "CPUBatchSize": 64,
     }
 )
 

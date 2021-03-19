@@ -38,7 +38,7 @@ args = dotdict(
         "lr": 0.001,
         "dropout": 0.3,
         "epochs": 10,
-        "batch_size": 64,
+        "batch_size": 512,
         "cuda": True,
         "num_channels": 512,
     }
@@ -63,7 +63,7 @@ class NNetWrapper(NeuralNet):
         self.prediction_timer_running = False
 
         # Prevent too many concurrent threads at once - should be bigger than batch size
-        self.sem = asyncio.Semaphore(70)
+        self.sem = asyncio.Semaphore(args.batch_size)
 
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -91,7 +91,7 @@ class NNetWrapper(NeuralNet):
         board: np array with board
         """
 
-        self.log.info("Prediction requested")
+        self.log.debug("Prediction requested")
         self.log.debug(f"Board: {board}")
 
         # Limit number of concurrent threads
@@ -152,7 +152,9 @@ class NNetWrapper(NeuralNet):
         Runs all of the pending predictions
         """
 
-        self.log.info("Starting predictions")
+        self.log.info(
+            f"Starting predictions - last prediction was {time.time() - self.last_prediction_time} secs ago"
+        )
 
         # timing
         start = time.time()

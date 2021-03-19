@@ -11,6 +11,8 @@ from tqdm import tqdm
 
 from Arena import Arena
 from MCTS import MCTS
+from UltimateTicTacToe.keras.NNet import args
+
 
 import asyncio
 
@@ -77,6 +79,7 @@ class ExecuteEpisodeActor:
             r = self.game.getGameEnded(board, curPlayer)
 
             if r != 0:
+                print("GAME COMPLETE")
                 return [
                     (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
                     for x in trainExamples
@@ -116,15 +119,25 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    # Create the actor to run the episode
-                    episodeActor = ExecuteEpisodeActor.remote(
-                        self.game, self.nnet, self.args
+                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                # Create the actors to run the episodes
+                workers = []
+                for _ in range(self.args.numCPUForMCTS):
+                    workers.append(
+                        ExecuteEpisodeActor.remote(self.game, self.nnet, self.args)
                     )
+
+                pool = ray.util.ActorPool(workers)
+
+                # Each pool will execute BATCH_SIZE games in a session
+                # Therefore, numEps / BATCH_SIZE is the number of sessions that must be run
+                for poolResult in pool.map(
+                    lambda a, v: a.executeMultipleEpisodes.remote(v),
+                    [int(args.batch_size / 8)]
+                    * int(self.args.numEps / (args.batch_size / 8)),
+                ):
                     # Run the episodes at once
-                    for trainingPositions in ray.get(
-                        episodeActor.executeMultipleEpisodes.remote(64)
-                    ):
+                    for trainingPositions in poolResult:
                         iterationTrainExamples += trainingPositions
 
                 # save the iteration examples to the history

@@ -18,7 +18,14 @@ class MCTS:
     This class handles the MCTS tree.
     """
 
-    def __init__(self, episode_actor, game, nnet, args):
+    def __init__(
+        self,
+        episode_actor,
+        game,
+        nnet,
+        args,
+        use_async=True,
+    ):
         self.episode_actor = episode_actor
         self.game = game
         self.nnet = nnet  # Reference to ray actor responsible for NN
@@ -32,6 +39,7 @@ class MCTS:
         self.Vs = {}  # stores game.getValidMoves for board s
 
         self.batch_size = ray.get(self.nnet.get_batch_size.remote())
+        self.use_async = use_async
 
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -98,7 +106,13 @@ class MCTS:
         if s not in self.Ps:
             # leaf node
             # Wait until the prediction is made, allowing other trees to be searched in the meantime
-            self.Ps[s], v = await self.episode_actor.request_prediction(canonicalBoard)
+            if self.use_async and self.episode_actor is not None:
+                self.Ps[s], v = await self.episode_actor.request_prediction(
+                    canonicalBoard
+                )
+            else:
+                self.Ps[s], v = ray.get(self.nnet.predict.remote(canonicalBoard))
+
             valids = self.game.getValidMoves(canonicalBoard, 1)
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])

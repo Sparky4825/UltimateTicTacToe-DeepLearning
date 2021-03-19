@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from Arena import Arena
 from MCTS import MCTS
+from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
 from UltimateTicTacToe.keras.NNet import args
 
 
@@ -23,7 +24,9 @@ log = logging.getLogger(__name__)
 
 @ray.remote
 class ExecuteEpisodeActor:
-    def __init__(self, game, nnet_actor, args):
+    def __init__(
+        self, game, nnet_actor, args, arena=False, p1_weights=None, p2_weights=None
+    ):
         self.game = game
         self.nnet_actor = nnet_actor
         self.args = args
@@ -47,9 +50,15 @@ class ExecuteEpisodeActor:
 
         self.log = logging.getLogger(self.__class__.__name__)
 
+        self.arena = arena
+        self.player1_weights = p1_weights
+        self.player2_weights = p2_weights
+        self.current_weight_set = 1
+
         coloredlogs.install(level="INFO", logger=self.log)
 
-        asyncio.create_task(self.prediction_timer())
+        if not arena:
+            asyncio.create_task(self.prediction_timer())
 
     def run_batch(self):
         self.log.debug("Requesting batch prediction")
@@ -68,6 +77,16 @@ class ExecuteEpisodeActor:
         self.run_evaluation.set()
 
         self.last_prediction_time = time.time()
+
+        # Flip weights back and forth every time
+        if self.arena:
+            if self.current_weight_set == 1:
+                ray.get(self.nnet_actor.set_weights.remote(self.player2_weights))
+
+            else:
+                ray.get(self.nnet_actor.set_weights.remote(self.player1_weights))
+
+            self.current_weight_set = 2 / self.current_weight_set
 
     async def prediction_timer(self):
         """
@@ -163,9 +182,14 @@ class ExecuteEpisodeActor:
         self.batch_size = num_episodes
 
         group = await asyncio.gather(
-            *[self.executeEpisode() for _ in range(num_episodes)]
+            *[self.executeEpisode() for _ in range(int(num_episodes))]
         )
-        return group
+
+        if not self.arena:
+            return group
+
+        else:
+            return [group.count(1), group.count(-1), group.count(0)]
 
     async def executeEpisode(self):
         """
@@ -177,6 +201,9 @@ class ExecuteEpisodeActor:
 
         It uses a temp=1 if episodeStep < tempThreshold, and thereafter
         uses temp=0.
+
+        If arena is set, it will play out with temp=0 and return the game result (1 for player 1, -1 for player 2, 0 for draw)
+        The function assumes that the weights will be shifted in between predictions.
 
         Returns:
             trainExamples: a list of examples of the form (canonicalBoard, currPlayer, pi,v)
@@ -193,12 +220,18 @@ class ExecuteEpisodeActor:
         while True:
             episodeStep += 1
             canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
-            temp = int(episodeStep < self.args.tempThreshold)
+
+            if not self.arena:
+                temp = int(episodeStep < self.args.tempThreshold)
+            else:
+                temp = 0
 
             pi = await mcts.getActionProb(canonicalBoard, temp=temp)
-            sym = self.game.getSymmetries(canonicalBoard, pi)
-            for b, p in sym:
-                trainExamples.append([b, curPlayer, p, None])
+
+            if not self.arena:
+                sym = self.game.getSymmetries(canonicalBoard, pi)
+                for b, p in sym:
+                    trainExamples.append([b, curPlayer, p, None])
 
             action = np.random.choice(len(pi), p=pi)
             board, curPlayer = self.game.getNextState(board, curPlayer, action)
@@ -212,6 +245,14 @@ class ExecuteEpisodeActor:
                 self.batch_size -= (
                     1  # No longer wait for this game to be present in batch
                 )
+                if self.arena:
+                    if r == 1:
+                        return curPlayer
+                    elif r == -1:
+                        return -1 * curPlayer
+                    else:
+                        return 0
+
                 return [
                     (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
                     for x in trainExamples
@@ -302,31 +343,82 @@ class Coach:
             log.info(f"About to begin training with {len(trainExamples)} samples")
 
             # training new network, keeping a copy of the old one
+            previous_weights = ray.get(self.nnet.get_weights.remote())
+
             ray.get(
                 self.nnet.save_checkpoint.remote(
                     folder=self.args.checkpoint, filename="temp.pth.tar"
                 )
             )
             # self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            # pmcts = MCTS(self.game, self.pnet, self.args)
+
+            # previous_player = NNetPlayer(
+            #     self.game, self.nnet, previous_weights, self.args
+            # )
 
             ray.get(self.nnet.train.remote(trainExamples))
-            log.info("Training has been completed")
-            # nmcts = MCTS(self.game, self.nnet, self.args)
+            log.info("TRAINING COMPLETE")
 
-            # log.info('PITTING AGAINST PREVIOUS VERSION')
-            # arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
-            #               lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
-            # pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
-            #
-            # log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
-            # if pwins + nwins == 0 or float(nwins) / (pwins + nwins) < self.args.updateThreshold:
-            #     log.info('REJECTING NEW MODEL')
-            #     self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            # else:
-            #     log.info('ACCEPTING NEW MODEL')
-            #     self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
-            #     self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
+            new_weights = ray.get(self.nnet.get_weights.remote())
+
+            # new_player = NNetPlayer(self.game, self.nnet, new_weights, self.args)
+
+            log.info("PITTING AGAINST PREVIOUS VERSION")
+            # arena = Arena(
+            #     lambda x: previous_player.get_move(x),
+            #     lambda x: new_player.get_move(x),
+            #     self.game,
+            # )
+
+            # Have both models play as both sides
+            log.info("Starting Arena round 1")
+            arenaActor1 = ExecuteEpisodeActor.remote(
+                self.game,
+                self.nnet,
+                self.args,
+                arena=True,
+                p1_weights=previous_weights,
+                p2_weights=new_weights,
+            )
+
+            pwins1, nwins1, draws1 = ray.get(
+                arenaActor1.executeMultipleEpisodes.remote(self.args.arenaCompare / 2)
+            )
+
+            log.info("Starting Arena round 2")
+            arenaActor2 = ExecuteEpisodeActor.remote(
+                self.game,
+                self.nnet,
+                self.args,
+                arena=True,
+                p1_weights=new_weights,
+                p2_weights=previous_weights,
+            )
+
+            nwins2, pwins2, draws2 = ray.get(
+                arenaActor2.executeMultipleEpisodes.remote(self.args.arenaCompare / 2)
+            )
+
+            pwins = pwins1 + pwins2
+            nwins = nwins1 + nwins2
+            draws = draws1 + draws2
+
+            log.info("NEW/PREV WINS : %d / %d ; DRAWS : %d" % (nwins, pwins, draws))
+            if (
+                pwins + nwins == 0
+                or float(nwins) / (pwins + nwins) < self.args.updateThreshold
+            ):
+                log.info("REJECTING NEW MODEL")
+                ray.get(self.nnet.set_weights.remote(previous_weights))
+            else:
+                log.info("ACCEPTING NEW MODEL")
+                ray.get(self.nnet.set_weights.remote(previous_weights))
+
+                ray.get(
+                    self.nnet.save_checkpoint.remote(
+                        folder=self.args.checkpoint, filename="best.pth.tar"
+                    )
+                )
 
     def getCheckpointFile(self, iteration):
         return "checkpoint_" + str(iteration) + ".pth.tar"

@@ -73,6 +73,12 @@ class NNetWrapper(NeuralNet):
     def get_batch_size(self):
         return self.args.batch_size
 
+    def get_weights(self):
+        return self.nnet.get_weights()
+
+    def set_weights(self, weights):
+        self.nnet.set_weights(weights)
+
     def train(self, examples):
         """
         examples: list of examples, each example is of form (board, pi, v)
@@ -90,12 +96,8 @@ class NNetWrapper(NeuralNet):
 
     def predict(self, board):
         """
-        Runs all of the pending predictions
+        Predict a single board
         """
-
-        self.log.info(
-            f"Starting single prediction - last prediction was {time.time() - self.last_prediction_time} secs ago"
-        )
 
         board = board[np.newaxis, :, :, :]
 
@@ -103,13 +105,15 @@ class NNetWrapper(NeuralNet):
         start = time.time()
 
         # run
-        self.prediction_results = self.nnet.predict(board)
+        prediction_results = self.nnet.predict(board)
 
         self.log.debug(
             "SINGLE PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start)
         )
 
         self.last_prediction_time = time.time()
+
+        return [prediction_results[0][0], prediction_results[1][0]]
 
     def predict_batch(self, batch):
         """

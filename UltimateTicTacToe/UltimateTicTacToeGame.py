@@ -1,24 +1,28 @@
 from __future__ import print_function
 import sys
-sys.path.append('..')
+
+sys.path.append("..")
 from Game import Game
 import numpy as np
 
-winning_positions = np.array([
-[0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
-[0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-[1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-[0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-[0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
-[1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
-[1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
-[0, 0, 1, 0, 1, 0, 1, 0, 0, 0],
-])
+winning_positions = np.array(
+    [
+        [0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+        [0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+        [0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
+        [1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+        [1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+        [0, 0, 1, 0, 1, 0, 1, 0, 0, 0],
+    ]
+)
 
 # Match a winning mask against every miniboard simultaneously
 winning_positions_large = np.zeros((8, 9, 10))
 for i in range(8):
     winning_positions_large[i] = np.full((9, 10), winning_positions[i])
+
 
 def check_mask(mask, a2):
     """
@@ -44,7 +48,7 @@ def check_miniboard(miniboard):
     result = np.zeros((2, 10))
     for player_index in range(1, 3):
         for wp_index in range(8):
-        
+
             # If the board is winning, return the player that won
             if check_mask(winning_positions[wp_index], miniboard[player_index - 1]):
                 return player_index
@@ -71,9 +75,16 @@ def check_miniboard_with_ties(miniboard):
     result = np.zeros((2, 10))
     for player_index in range(1, 3):
         for wp_index in range(8):
-        
+
             # If the board is winning and the other player has no claims, return the player that won
-            if check_mask(winning_positions[wp_index], miniboard[int(player_index - 1)]) and not np.logical_and(winning_positions[wp_index], miniboard[int((2 / player_index) - 1)]).any():
+            if (
+                check_mask(
+                    winning_positions[wp_index], miniboard[int(player_index - 1)]
+                )
+                and not np.logical_and(
+                    winning_positions[wp_index], miniboard[int((2 / player_index) - 1)]
+                ).any()
+            ):
                 return player_index
 
     # If there are no found wins, check if there are empty spaces
@@ -150,7 +161,7 @@ class TicTacToeGame(Game):
 
     def getActionSize(self):
         # return number of actions
-        return self.n*self.n
+        return self.n * self.n
 
     def getNextState(self, board, player, action):
         """
@@ -184,7 +195,6 @@ class TicTacToeGame(Game):
             b[0][board_index][9] = 1
             b[1][board_index][9] = 1
 
-
         # Check if the required_board is not won/tied and there is a required board
         if b[0][piece_index][9] == 0 and b[1][piece_index][9] == 0:
             b[2] = np.zeros((9, 10))
@@ -194,7 +204,6 @@ class TicTacToeGame(Game):
         else:
             b[2] = np.full((9, 10), 1)
 
-            
             # Even if there is no required board, moves cannot be played on boards that are won/lost/tied
             for miniboard_index in range(9):
                 if b[0][miniboard_index][9] == 1 or b[1][miniboard_index][9] == 1:
@@ -213,7 +222,7 @@ class TicTacToeGame(Game):
         result = np.logical_and(result, board[2])
 
         # Convert to a 1d array
-        return result.flatten().astype('int')
+        return result.flatten().astype("int")
 
     def getGameEnded(self, board, player):
         result = np.zeros((2, 10))
@@ -231,8 +240,6 @@ class TicTacToeGame(Game):
                 result[1][i] = 1
             # Else draw and leave value at 0
 
-
-
         # Step 2: Check for a win overall
         overall_status = check_miniboard_with_ties(result)
         if overall_status == 1:
@@ -240,13 +247,12 @@ class TicTacToeGame(Game):
         elif overall_status == 2:
             return -1
 
-
         # If there are any valid moves the game is ongoing
         if np.any(self.getValidMoves(board, player)):
             return 0
 
         # If no wins and no legal moves, game is a draw
-        # Draw has very little value 
+        # Draw has very little value
         return 1e-4
 
     def getCanonicalForm(self, board, player):
@@ -264,7 +270,7 @@ class TicTacToeGame(Game):
         Returns a list of tuples in the form (board, pi) where each board and pi have have the exact same rotational transformations appplied
         """
         # mirror, rotational
-        assert(len(pi) == 81)  # 81 possible moves
+        assert len(pi) == 81  # 81 possible moves
         # Change into 3 rows of 3 boards of 3 rows of 3 spaces
         pi_board = np.reshape(pi, (3, 3, 3, 3))
 
@@ -298,15 +304,21 @@ class TicTacToeGame(Game):
                         for flip_miniboard_index in range(3):
 
                             # Flip the pieces in each miniboard
-                            newB[0][flip_row_index][flip_miniboard_index] = np.fliplr(newB[0][flip_row_index][flip_miniboard_index])
-                            newB[1][flip_row_index][flip_miniboard_index] = np.fliplr(newB[1][flip_row_index][flip_miniboard_index])
-                            newB[2][flip_row_index][flip_miniboard_index] = np.fliplr(newB[1][flip_row_index][flip_miniboard_index])
+                            newB[0][flip_row_index][flip_miniboard_index] = np.fliplr(
+                                newB[0][flip_row_index][flip_miniboard_index]
+                            )
+                            newB[1][flip_row_index][flip_miniboard_index] = np.fliplr(
+                                newB[1][flip_row_index][flip_miniboard_index]
+                            )
+                            newB[2][flip_row_index][flip_miniboard_index] = np.fliplr(
+                                newB[1][flip_row_index][flip_miniboard_index]
+                            )
 
                     # Flip each miniboard in whole board
                     newB = np.fliplr(newB)
                     newPi = np.fliplr(newPi)
                     newW = np.fliplr(newW)
-                
+
                 newB = np.reshape(newB, (3, 9, 9))
                 newW = np.reshape(w, (3, 9, 1))
 
@@ -318,14 +330,13 @@ class TicTacToeGame(Game):
         return l
 
     def stringRepresentation(self, board):
-        # TODO: Make stringRepresentation(board) more space and time effecient
+        # TODO: Make stringRepresentation(board) more space and time efficient
         # 8x8 numpy array (canonical board)
         return np.array2string(board)
 
     @staticmethod
     def display(board):
-        # TODO: Implement display(board) function
-        result = ''
+        result = ""
         for row in range(9):
             for board_row in range(3):
                 for col in range(3):
@@ -335,11 +346,11 @@ class TicTacToeGame(Game):
                         absolute_piece_index
                     )
 
-                    piece_char = ' '
+                    piece_char = " "
                     if board[0][board_index][piece_index] == 1:
-                        piece_char = 'X'
+                        piece_char = "X"
                     elif board[1][board_index][piece_index] == 1:
-                        piece_char = 'O'
+                        piece_char = "O"
 
                     result += piece_char
                     result += " | "
@@ -350,5 +361,3 @@ class TicTacToeGame(Game):
                 result += "\n=================================\n"
 
         print(result)
-                
-                    

@@ -12,25 +12,31 @@ from tqdm import tqdm
 from Arena import Arena
 from MCTS import MCTS
 
+import asyncio
+
 log = logging.getLogger(__name__)
 
 
-class Coach():
-    """
-    This class executes the self-play + learning. It uses the functions defined
-    in Game and NeuralNet. args are specified in main.py.
-    """
-
-    def __init__(self, game, nnet, args):
+@ray.remote
+class ExecuteEpisodeActor:
+    def __init__(self, game, nnet_actor, args):
         self.game = game
-        self.nnet = nnet  # Reference to ray actor responsible for processing NN
-        # self.pnet = self.nnet.__class__(self.game)  # the competitor network
+        self.nnet_actor = nnet_actor
         self.args = args
-        self.mcts = MCTS(self.game, self.nnet, self.args)
-        self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
-        self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
-    def executeEpisode(self):
+    async def executeMultipleEpisodes(self, num_episodes):
+        """
+        Will start multiple executeEpisodes at once, concurrently.
+        :param num_episodes:
+        :return:
+        """
+
+        group = await asyncio.gather(
+            *[self.executeEpisode() for _ in range(num_episodes)]
+        )
+        return group
+
+    async def executeEpisode(self):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -48,26 +54,51 @@ class Coach():
         """
         trainExamples = []
         board = self.game.getInitBoard()
-        self.curPlayer = 1
+        curPlayer = 1
         episodeStep = 0
+
+        mcts = MCTS(self.game, self.nnet_actor, self.args)
 
         while True:
             episodeStep += 1
-            canonicalBoard = self.game.getCanonicalForm(board, self.curPlayer)
+            canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
             temp = int(episodeStep < self.args.tempThreshold)
 
-            pi = self.mcts.getActionProb(canonicalBoard, temp=temp)
+            pi = await mcts.getActionProb(canonicalBoard, temp=temp)
             sym = self.game.getSymmetries(canonicalBoard, pi)
             for b, p in sym:
-                trainExamples.append([b, self.curPlayer, p, None])
+                trainExamples.append([b, curPlayer, p, None])
 
             action = np.random.choice(len(pi), p=pi)
-            board, self.curPlayer = self.game.getNextState(board, self.curPlayer, action)
+            board, curPlayer = self.game.getNextState(board, curPlayer, action)
 
-            r = self.game.getGameEnded(board, self.curPlayer)
+            self.game.display(board)
+
+            r = self.game.getGameEnded(board, curPlayer)
 
             if r != 0:
-                return [(x[0], x[2], r * ((-1) ** (x[1] != self.curPlayer))) for x in trainExamples]
+                return [
+                    (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
+                    for x in trainExamples
+                ]
+
+
+class Coach:
+    """
+    This class executes the self-play + learning. It uses the functions defined
+    in Game and NeuralNet. args are specified in main.py.
+    """
+
+    def __init__(self, game, nnet, args):
+        self.game = game
+        self.nnet = nnet  # Reference to ray actor responsible for processing NN
+        # self.pnet = self.nnet.__class__(self.game)  # the competitor network
+        self.args = args
+        self.mcts = MCTS(self.game, self.nnet, self.args)
+        self.trainExamplesHistory = (
+            []
+        )  # history of examples from args.numItersForTrainExamplesHistory latest iterations
+        self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
     def learn(self):
         """
@@ -80,24 +111,35 @@ class Coach():
 
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
-            log.info(f'Starting Iter #{i} ...')
+            log.info(f"Starting Iter #{i} ...")
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
                 for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    self.mcts = MCTS(self.game, self.nnet, self.args)  # reset search tree
-                    iterationTrainExamples += self.executeEpisode()
+                    # Create the actor to run the episode
+                    episodeActor = ExecuteEpisodeActor.remote(
+                        self.game, self.nnet, self.args
+                    )
+                    # Run the episodes at once
+                    for trainingPositions in ray.get(
+                        episodeActor.executeMultipleEpisodes.remote(64)
+                    ):
+                        iterationTrainExamples += trainingPositions
 
-                # save the iteration examples to the history 
+                # save the iteration examples to the history
                 self.trainExamplesHistory.append(iterationTrainExamples)
 
-            if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
+            if (
+                len(self.trainExamplesHistory)
+                > self.args.numItersForTrainExamplesHistory
+            ):
                 log.warning(
-                    f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}")
+                    f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}"
+                )
                 self.trainExamplesHistory.pop(0)
             # backup history to a file
-            # NB! the examples were collected using the model from the previous iteration, so (i-1)  
+            # NB! the examples were collected using the model from the previous iteration, so (i-1)
             self.saveTrainExamples(i - 1)
 
             # shuffle examples before training
@@ -107,7 +149,11 @@ class Coach():
             shuffle(trainExamples)
 
             # training new network, keeping a copy of the old one
-            ray.get(self.nnet.save_checkpoint.remote(folder=self.args.checkpoint, filename='temp.pth.tar'))
+            ray.get(
+                self.nnet.save_checkpoint.remote(
+                    folder=self.args.checkpoint, filename="temp.pth.tar"
+                )
+            )
             # self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             # pmcts = MCTS(self.game, self.pnet, self.args)
 
@@ -129,7 +175,7 @@ class Coach():
             #     self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
 
     def getCheckpointFile(self, iteration):
-        return 'checkpoint_' + str(iteration) + '.pth.tar'
+        return "checkpoint_" + str(iteration) + ".pth.tar"
 
     def saveTrainExamples(self, iteration):
         folder = self.args.checkpoint
@@ -141,7 +187,9 @@ class Coach():
         f.closed
 
     def loadTrainExamples(self):
-        modelFile = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
+        modelFile = os.path.join(
+            self.args.load_folder_file[0], self.args.load_folder_file[1]
+        )
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):
             log.warning(f'File "{examplesFile}" with trainExamples not found!')
@@ -152,7 +200,7 @@ class Coach():
             log.info("File with trainExamples found. Loading it...")
             with open(examplesFile, "rb") as f:
                 self.trainExamplesHistory = Unpickler(f).load()
-            log.info('Loading done!')
+            log.info("Loading done!")
 
             # examples based on the model were already collected (loaded)
             self.skipFirstSelfPlay = True

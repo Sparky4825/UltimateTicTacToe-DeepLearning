@@ -1,14 +1,17 @@
 import Arena
+from UltimateTicTacToe.UltimateTicTacToeGame import TicTacToeGame
 from MCTS import MCTS
+
 # from othello.OthelloGame import OthelloGame
 # from othello.OthelloPlayers import *
 # from othello.pytorch.NNet import NNetWrapper as NNet
 
-from tictactoe.TicTacToeGame import TicTacToeGame as Game
-from tictactoe.keras.NNet import NNetWrapper as NNet
-from tictactoe.TicTacToePlayers import  *
 
 import numpy as np
+
+from UltimateTicTacToe.UltimateTicTacToePlayers import *
+from UltimateTicTacToe.keras.NNet import NNetWrapper
+from main import args
 from utils import *
 
 """
@@ -19,7 +22,9 @@ any agent.
 mini_othello = False  # Play in 6x6 instead of the normal 8x8.
 human_vs_cpu = True
 
-g = Game(3)
+ray.init()
+
+g = TicTacToeGame()
 
 # all players
 rp = RandomPlayer(g).play
@@ -27,9 +32,7 @@ rp = RandomPlayer(g).play
 hp = HumanTicTacToePlayer(g).play
 
 
-
 # nnet players
-n1 = NNet(g)
 # if mini_othello:
 #     n1.load_checkpoint('./pretrained_models/othello/pytorch/','6x100x25_best.pth.tar')
 # else:
@@ -37,23 +40,25 @@ n1 = NNet(g)
 #
 #
 # n1.load_checkpoint("tictactoe\\pretrained", "best.pth.tar")
-n1.load_checkpoint(".\\temp", "temp.pth.tar")
 
-args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0})
-mcts1 = MCTS(g, n1, args1)
-n1p = lambda x: np.argmax(mcts1.getActionProb(x, temp=0))
+NNactor = NNetWrapper.remote(g)
+ray.get(NNactor.load_checkpoint.remote("./temp/", "best.pth.tar"))
+
+weights = ray.get(NNactor.get_weights.remote())
+
+
+n1p = NNetPlayer(g, NNactor, weights, args)
+
+
+ray.get(NNactor.load_checkpoint.remote(".\\temp", "temp.pth.tar"))
+
 
 if human_vs_cpu:
     player2 = hp
 else:
-    n2 = NNet(g)
-    n2.load_checkpoint('./pretrained_models/othello/pytorch/', '8x8_100checkpoints_best.pth.tar')
-    args2 = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
-    mcts2 = MCTS(g, n2, args2)
-    n2p = lambda x: np.argmax(mcts2.getActionProb(x, temp=0))
+    pass
 
-    player2 = n2p  # Player 2 is neural network if it's cpu vs cpu.
 
-arena = Arena.Arena(n1p, player2, g, display=Game.display)
+arena = Arena.Arena(n1p.get_move, player2, g, display=TicTacToeGame.display)
 
 print(arena.playGames(2, verbose=True))

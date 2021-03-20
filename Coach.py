@@ -236,15 +236,14 @@ class ExecuteEpisodeActor:
             action = np.random.choice(len(pi), p=pi)
             board, curPlayer = self.game.getNextState(board, curPlayer, action)
 
-            self.game.display(board)
-
             r = self.game.getGameEnded(board, curPlayer)
 
             if r != 0:
-                print("GAME COMPLETE")
                 self.batch_size -= (
                     1  # No longer wait for this game to be present in batch
                 )
+                print(f"GAME COMPLETE - {self.batch_size} remaining")
+
                 if self.arena:
                     if r == 1:
                         return curPlayer
@@ -385,6 +384,8 @@ class Coach:
                 arenaActor1.executeMultipleEpisodes.remote(self.args.arenaCompare / 2)
             )
 
+            ray.kill(arenaActor1)
+
             log.info("Starting Arena round 2")
             arenaActor2 = ExecuteEpisodeActor.remote(
                 self.game,
@@ -439,7 +440,8 @@ class Coach:
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):
             log.warning(f'File "{examplesFile}" with trainExamples not found!')
-            r = input("Continue? [y|n]")
+            # r = input("Continue? [y|n]")
+            r = "y"
             if r != "y":
                 sys.exit()
         else:

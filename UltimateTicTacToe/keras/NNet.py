@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import os
 import shutil
@@ -37,8 +38,8 @@ args = dotdict(
     {
         "lr": 0.001,
         "dropout": 0.3,
-        "epochs": 10,
-        "batch_size": 512,
+        "epochs": 30,
+        "batch_size": 2048,
         "cuda": True,
         "num_channels": 512,
     }
@@ -83,6 +84,14 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
+
+        import tensorflow as tf
+
+        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=log_dir, histogram_freq=1
+        )
+
         input_boards, target_pis, target_vs = list(zip(*examples))
         input_boards = np.asarray(input_boards)
         target_pis = np.asarray(target_pis)
@@ -92,6 +101,7 @@ class NNetWrapper(NeuralNet):
             y=[target_pis, target_vs],
             batch_size=args.batch_size,
             epochs=args.epochs,
+            callbacks=[tensorboard_callback],
         )
 
     def predict(self, board):
@@ -152,3 +162,6 @@ class NNetWrapper(NeuralNet):
         # if not os.path.exists(filepath):
         #     raise FileNotFoundError("No model in path '{}'".format(filepath))
         self.nnet.load_weights(filepath)
+
+    def model_summary(self):
+        return self.nnet.summary(line_length=275)

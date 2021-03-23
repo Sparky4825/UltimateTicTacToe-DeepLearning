@@ -38,40 +38,32 @@ def get_model(game, args):
         shape=(board_x, board_y, board_z)
     )  # s: batch_size x board_x x board_y
 
-    x_image = Reshape((board_x, board_y, board_z, 1))(
-        input_boards
-    )  # batch_size  x board_x x board_y x 1
-    h_conv1 = Activation("relu")(
-        BatchNormalization(axis=4)(
-            Conv2D(args.num_channels, 3, padding="same")(x_image)
-        )
-    )  # batch_size  x board_x x board_y x num_channels
-    h_conv2 = Activation("relu")(
-        BatchNormalization(axis=4)(
-            Conv2D(args.num_channels, 3, padding="same")(h_conv1)
-        )
-    )  # batch_size  x board_x x board_y x num_channels
-    h_conv3 = Activation("relu")(
-        BatchNormalization(axis=4)(
-            Conv2D(args.num_channels, 3, padding="same")(h_conv2)
-        )
-    )  # batch_size  x (board_x) x (board_y) x num_channels
-    h_conv4 = Activation("relu")(
-        BatchNormalization(axis=4)(
-            Conv2D(args.num_channels, 3, padding="valid")(h_conv3)
-        )
-    )  # batch_size  x (board_x-2) x (board_y-2) x num_channels
-    h_conv4_flat = Flatten()(h_conv4)
-    s_fc1 = Dropout(args.dropout)(
-        Activation("relu")(BatchNormalization(axis=1)(Dense(1024)(h_conv4_flat)))
-    )  # batch_size x 1024
-    s_fc2 = Dropout(args.dropout)(
-        Activation("relu")(BatchNormalization(axis=1)(Dense(512)(s_fc1)))
-    )  # batch_size x 1024
+    # First pass though 2 layers with only one node per spot (plus 1 for won boards)
+
+    dense1 = Dense(900, activation="relu")(input_boards)
+
+    dense2 = Dense(900, activation="relu")(dense1)
+
+    resize = Flatten()(dense2)
+
+    num_dense_layers = 20
+
+    previous_layer = resize
+
+    for i in range(num_dense_layers):
+        previous_layer = Dense(900, activation="relu")(previous_layer)
+        previous_layer = BatchNormalization()(previous_layer)
+
+        # Add dropout layer every other
+        # if i % 2 == 0:
+        #     previous_layer = Dropout(args.dropout)(previous_layer)
+
+    final_dense_layer = previous_layer
+
     pi = Dense(action_size, activation="softmax", name="pi")(
-        s_fc2
+        final_dense_layer
     )  # batch_size x action_size
-    v = Dense(1, activation="tanh", name="v")(s_fc2)  # batch_size x 1
+    v = Dense(1, activation="tanh", name="v")(final_dense_layer)  # batch_size x 1
 
     model = Model(inputs=input_boards, outputs=[pi, v])
     model.compile(

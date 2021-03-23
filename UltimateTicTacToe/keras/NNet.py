@@ -109,56 +109,30 @@ class NNetWrapper(NeuralNet):
         # TODO: Once there are no longer enough predictions to fill a batch, a prediction run must be run anyway
 
         pending_evaluations = np.empty((0, 3, 9, 10))
-        episodes = []
 
-        totalQueueTime = 0
+        # Wait until there is a batch to evaluate
+        # t1 = time.time()
+        episodes = self.toNNQueue.get()
+        # t2 = time.time()
 
-        episodesAppendTime = 0
-        npAppendTime = 0
+        # print(f"Waiting on BatchMaker for {t2 - t1} seconds")
 
-        t1 = time.time()
-        # Loop until there is a full batch or there are not enough unfinished games to make a full batch
-        while len(episodes) < cpu_batch_size and (
-            self.args.numEps - self.resultsQueue.size() > self.args.CPUBatchSize
-            or len(episodes) == 0
-        ):
-            q1 = time.time()
-            new_episode = self.toNNQueue.get()
-            q2 = time.time()
-
-            totalQueueTime += q2 - q1
-
-            q1 = time.time()
-
-            episodes.append(new_episode)
-            q2 = time.time()
-            episodesAppendTime += q2 - q1
-
-            q1 = time.time()
-
+        for ep in episodes:
             pending_evaluations = np.append(
                 pending_evaluations,
-                new_episode.mcts.canonicalBoard[np.newaxis, :, :, :],
+                ep.canonicalBoard[np.newaxis, :, :, :],
                 axis=0,
             )
-            q2 = time.time()
-            npAppendTime += q2 - q1
 
-        t2 = time.time()
-
-        totTime = t2 - t1
-
-        print(
-            f"Batch evaluation with {len(episodes)} eps! - Consolidating took {t2 - t1} sec - Queue % {round(totalQueueTime / totTime, 2)} - List append {round(episodesAppendTime / totTime, 2)} - NP append {round(npAppendTime / totTime, 2)}"
-        )
+        self.log.debug(f"Batch evaluation with {len(episodes)} eps!")
         t1 = time.time()
         results = self.predict_batch(pending_evaluations)
         t2 = time.time()
 
-        print(f"Batch evaluation took {t2 - t1} seconds")
+        self.log.debug(f"Batch evaluation took {t2 - t1} seconds")
         for i in range(len(episodes)):
             ep = episodes[i]
-            ep.mcts.pi, ep.mcts.v = results[0][i], results[1][i][0]
+            ep.pi, ep.v = results[0][i], results[1][i][0]
             self.fromNNQueue.put(ep)
 
     def predict(self, board):

@@ -9,33 +9,77 @@ from random import shuffle
 import coloredlogs
 import numpy as np
 import ray
+from ray.util.queue import Queue
 from tqdm import tqdm
 
 from Arena import Arena
 from MCTS import MCTS
 from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
-from UltimateTicTacToe.keras.NNet import args
 
+from args import args
 
 import asyncio
 
 log = logging.getLogger(__name__)
 
 
+class NNetEvalTicket:
+    """
+    Contains the minimum amount of information the NNet needs
+    to give an evaluation.
+    """
+
+    def __init__(self, canonicalBoard):
+        self.canonicalBoard = canonicalBoard
+        self.pi = None
+        self.v = None
+
+
+class Episode:
+    """
+    Keeps track on a single 'episode' (or game) that the
+    computer is playing against itself. Will be passed between
+    Episode Actors and NNetActors through a Ray queue.
+    """
+
+    def __init__(self, game):
+        self.trainExamples = []
+        self.board = game.getInitBoard()
+        self.curPlayer = 1
+        self.episodeStep = 0
+        self.game = game
+
+        self.mcts = MCTS(game)
+
+        self.temp = 1
+
+
 @ray.remote
 class ExecuteEpisodeActor:
     def __init__(
-        self, game, nnet_actor, args, arena=False, p1_weights=None, p2_weights=None
+        self,
+        game,
+        nnet_actor,
+        args,
+        toNNQueue,
+        fromNNQueue,
+        resultsQueue,
+        arena=False,
+        p1_weights=None,
+        p2_weights=None,
     ):
+        self.id = id
+
         self.game = game
         self.nnet_actor = nnet_actor
         self.args = args
 
-        # Variables to keep track of batch processing of boards
-        self.batch_size = ray.get(nnet_actor.get_batch_size.remote())
+        self.toNNQueue = toNNQueue
+        self.fromNNQueue = fromNNQueue
+        self.resultsQueue = resultsQueue
 
-        # Allow enough concurrent processes to fill the batch
-        self.sem = asyncio.Semaphore(self.batch_size + 5)
+        # Variables to keep track of batch processing of boards
+        self.batch_size = self.args.CPUBatchSize
 
         self.prediction_timer_running = False
         self.last_prediction_time = time.time()
@@ -57,205 +101,191 @@ class ExecuteEpisodeActor:
 
         coloredlogs.install(level="INFO", logger=self.log)
 
-        if not arena:
-            asyncio.create_task(self.prediction_timer())
-
-    def run_batch(self):
-        self.log.debug("Requesting batch prediction")
-        self.prediction_results = ray.get(
-            self.nnet_actor.predict_batch.remote(self.pending_evaluations)
-        )
-
-        # Clear out the old boards
-        self.pending_evaluations = np.empty((0, 3, 9, 10))
-
-        # Add the boards need to be claimed
-        self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
-
-        # Tell the awaiting functions that the batch has been processed and they need to claim results
-        self.claim_evaluation.clear()
-        self.run_evaluation.set()
-
-        self.last_prediction_time = time.time()
-
-        # Flip weights back and forth every time
-        if self.arena:
-            if self.current_weight_set == 1:
-                ray.get(self.nnet_actor.set_weights.remote(self.player2_weights))
-
-            else:
-                ray.get(self.nnet_actor.set_weights.remote(self.player1_weights))
-
-            self.current_weight_set = 2 / self.current_weight_set
-
-    async def prediction_timer(self):
+    def startEpisode(self):
         """
-        Checks every second to see if the prediction timer
-        has run out and a prediction needs to be run, despite
-        not having a full batch
-        :return:
+        Starts an episode and adds it to the queue for the NNet Actor to evaluate.
         """
 
-        self.log.info("PREDICTION TIMER STARTED")
+        # Preform the starting operations
+        new_episode = Episode(self.game)
 
-        self.prediction_timer_running = True
-
-        while self.prediction_timer_running:
-            self.log.debug("Checking if prediction is needed")
-            if (
-                time.time() > self.last_prediction_time + 2
-                and len(self.pending_evaluations) > 0
-            ):
-                self.log.info("Prediction is needed")
-                self.run_batch()
-
-            else:
-                self.log.debug(
-                    f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
-                )
-                await asyncio.sleep(2)
-
-    async def request_prediction(self, board):
-        """
-        Adds the given board to be evaluated on the GPU with the next batch.
-        Then it awaits for the result.
-        :param board:
-        :return:
-        """
-
-        self.log.debug(
-            f"Requesting prediction {len(self.pending_evaluations)} {self.batch_size}"
-        )
-
-        async with self.sem:
-            # Update the timer every time a new prediction is requested
-            self.last_prediction_time = time.time()
-
-            if self.run_evaluation.is_set():
-                self.log.debug(
-                    "Waiting for another process to claim results to add prediction"
-                )
-                self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
-                await self.claim_evaluation.wait()
-
-            # Add the board to the list of predictions to be made
-            self.pending_evaluations = np.append(
-                self.pending_evaluations, board[np.newaxis, :, :], axis=0
-            )
-
-            # Save the board index locally to remember which results go with this board after predictions are calculated
-            board_index = len(self.pending_evaluations) - 1
-
-            # Check if its time to run a batch
-            if len(self.pending_evaluations) >= self.batch_size:
-                self.run_batch()
-
-            else:
-                # Wait until the predictions have been made
-                await self.run_evaluation.wait()
-
-            # Get and return the results
-            self.log.debug(f"Prediction results: {self.prediction_results}")
-            pi, v = (
-                self.prediction_results[0][board_index],
-                self.prediction_results[1][board_index],
-            )
-            self.unclaimed_results[board_index] = 0
-
-            # Check if all the results have been claimed
-            if not np.any(self.unclaimed_results):
-
-                # If they have, allow the next set of boards to be setup
-                self.claim_evaluation.set()
-                self.run_evaluation.clear()
-
-            return pi, v
-
-    async def executeMultipleEpisodes(self, num_episodes):
-        """
-        Will start multiple executeEpisodes at once, concurrently.
-        :param num_episodes:
-        :return:
-        """
-
-        # Update batch size to the correct size (default is equal to training value for NN)
-        self.batch_size = num_episodes
-
-        group = await asyncio.gather(
-            *[self.executeEpisode() for _ in range(int(num_episodes))]
-        )
+        new_episode.episodeStep += 1
 
         if not self.arena:
-            return group
-
+            new_episode.temp = int(new_episode.episodeStep < self.args.tempThreshold)
         else:
-            return [group.count(1), group.count(-1), group.count(0)]
+            new_episode.temp = 0
 
-    async def executeEpisode(self):
+        assert new_episode.mcts.searchPreNN() is True
+
+        # TODO: This function assumes that the NNet will be needed always for the first move, is this correct?
+
+        # Add it to the queue for NN evaluation
+        self.toNNQueue.put(new_episode)
+
+    def checkMoveandMake(self, ep):
         """
-        This function executes one episode of self-play, starting with player 1.
-        As the game is played, each turn is added as a training example to
-        trainExamples. The game is played till the game ends. After the game
-        ends, the outcome of the game is used to assign values to each example
-        in trainExamples.
-
-        It uses a temp=1 if episodeStep < tempThreshold, and thereafter
-        uses temp=0.
-
-        If arena is set, it will play out with temp=0 and return the game result (1 for player 1, -1 for player 2, 0 for draw)
-        The function assumes that the weights will be shifted in between predictions.
-
-        Returns:
-            trainExamples: a list of examples of the form (canonicalBoard, currPlayer, pi,v)
-                           pi is the MCTS informed policy vector, v is +1 if
-                           the player eventually won the game, else -1.
+        Return true if game is over at move
+        :param ep:
+        :return:
         """
-        trainExamples = []
-        board = self.game.getInitBoard()
-        curPlayer = 1
-        episodeStep = 0
-
-        mcts = MCTS(self, self.game, self.nnet_actor, self.args)
-
-        while True:
-            episodeStep += 1
-            canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
+        if ep.episodeStep >= self.args.numMCTSSims:
+            # Get final results and make a move
+            print("MAKING A MOVE")
+            ep.mcts.getActionProb(ep.temp)
 
             if not self.arena:
-                temp = int(episodeStep < self.args.tempThreshold)
-            else:
-                temp = 0
-
-            pi = await mcts.getActionProb(canonicalBoard, temp=temp)
-
-            if not self.arena:
-                sym = self.game.getSymmetries(canonicalBoard, pi)
+                sym = self.game.getSymmetries(ep.mcts.canonicalBoard, ep.mcts.pi)
                 for b, p in sym:
-                    trainExamples.append([b, curPlayer, p, None])
+                    ep.trainExamples.append([b, ep.curPlayer, p, None])
 
-            action = np.random.choice(len(pi), p=pi)
-            board, curPlayer = self.game.getNextState(board, curPlayer, action)
+            probs = ep.mcts.getActionProb(ep.temp)
 
-            r = self.game.getGameEnded(board, curPlayer)
+            action = np.random.choice(len(probs), p=probs)
+            ep.board, ep.curPlayer = self.game.getNextState(
+                ep.board, ep.curPlayer, action
+            )
 
-            if r != 0:
-                self.batch_size -= (
-                    1  # No longer wait for this game to be present in batch
-                )
-                print(f"GAME COMPLETE - {self.batch_size} remaining")
+            self.game.display(ep.board)
 
+            result = self.game.getGameEnded(ep.board, ep.curPlayer)
+
+            if result != 0:
+                # Game complete
                 if self.arena:
-                    if r == 1:
-                        return curPlayer
-                    elif r == -1:
-                        return -1 * curPlayer
+                    if result == 1:
+                        self.resultsQueue.put(ep.curPlayer)
+                    elif result == -1:
+                        self.resultsQueue.put(-1 * ep.curPlayer)
                     else:
-                        return 0
+                        self.resultsQueue.put(1e-8)
+                else:
+                    self.resultsQueue.put(
+                        [
+                            (
+                                x[0],
+                                x[2],
+                                result * ((-1) ** (x[1] != ep.curPlayer)),
+                            )
+                            for x in ep.trainExamples
+                        ]
+                    )
+                # Game is over, exit function
+                return True
 
-                return [
-                    (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
-                    for x in trainExamples
-                ]
+            else:
+                # Game not complete - start MCTS search again
+
+                ep.mcts.moveStartBoard2Action(action)
+                ep.episodeStep = 0
+        return False
+
+    def loopExecuteEpisodeFromQueue(self):
+        while True:
+            self.executeEpisodeTurnFromQueue()
+
+    def executeEpisodeTurnFromQueue(self):
+        """
+        Gets a single episode from the queue, executes the next turn and adds
+        it back to the other queue.
+
+        During the episode's time between queues, its pi value will have been
+        set by the NN actor.
+        """
+
+        t1 = time.time()
+        ep = self.fromNNQueue.get()
+        t2 = time.time()
+
+        # print(f"Waiting on fromNNQueue for {t2 - t1} seconds")
+
+        ep.mcts.searchPostNN()
+
+        # Loop until a NN eval is needed
+        while not ep.mcts.searchPreNN():
+            ep.episodeStep += 1
+
+            if not self.arena:
+                ep.temp = int(ep.episodeStep < self.args.tempThreshold)
+            else:
+                ep.temp = 0
+
+            if self.checkMoveandMake(ep):
+                return
+
+        if self.checkMoveandMake(ep):
+            return
+
+        ep.episodeStep += 1
+        # Once the while loop is exited, it means a NN evaluation is needed
+        self.toNNQueue.put(ep)
+
+    # async def executeEpisode(self):
+    #     """
+    #     This function executes one episode of self-play, starting with player 1.
+    #     As the game is played, each turn is added as a training example to
+    #     trainExamples. The game is played till the game ends. After the game
+    #     ends, the outcome of the game is used to assign values to each example
+    #     in trainExamples.
+    #
+    #     It uses a temp=1 if episodeStep < tempThreshold, and thereafter
+    #     uses temp=0.
+    #
+    #     If arena is set, it will play out with temp=0 and return the game result (1 for player 1, -1 for player 2, 0 for draw)
+    #     The function assumes that the weights will be shifted in between predictions.
+    #
+    #     Returns:
+    #         trainExamples: a list of examples of the form (canonicalBoard, currPlayer, pi,v)
+    #                        pi is the MCTS informed policy vector, v is +1 if
+    #                        the player eventually won the game, else -1.
+    #     """
+    #     trainExamples = []
+    #     board = self.game.getInitBoard()
+    #     curPlayer = 1
+    #     episodeStep = 0
+    #
+    #     mcts = MCTS(self, self.game, self.nnet_actor, self.args)
+    #
+    #     while True:
+    #         episodeStep += 1
+    #         canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
+    #
+    #         if not self.arena:
+    #             temp = int(episodeStep < self.args.tempThreshold)
+    #         else:
+    #             temp = 0
+    #
+    #         pi = await mcts.getActionProb(canonicalBoard, temp=temp)
+    #
+    #         if not self.arena:
+    #             sym = self.game.getSymmetries(canonicalBoard, pi)
+    #             for b, p in sym:
+    #                 trainExamples.append([b, curPlayer, p, None])
+    #
+    #         action = np.random.choice(len(pi), p=pi)
+    #         board, curPlayer = self.game.getNextState(board, curPlayer, action)
+    #
+    #         r = self.game.getGameEnded(board, curPlayer)
+    #
+    #         if r != 0:
+    #             self.batch_size -= (
+    #                 1  # No longer wait for this game to be present in batch
+    #             )
+    #             print(f"GAME COMPLETE - {self.batch_size} remaining")
+    #
+    #             if self.arena:
+    #                 if r == 1:
+    #                     return curPlayer
+    #                 elif r == -1:
+    #                     return -1 * curPlayer
+    #                 else:
+    #                     return 0
+    #
+    #             return [
+    #                 (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
+    #                 for x in trainExamples
+    #             ]
+    #
 
 
 class Coach:
@@ -264,7 +294,20 @@ class Coach:
     in Game and NeuralNet. args are specified in main.py.
     """
 
-    def __init__(self, game, nnet, args):
+    def __init__(
+        self,
+        game,
+        nnet,
+        args,
+        toNNQueue,
+        fromNNQueue,
+        resultsQueue,
+    ):
+
+        self.toNNQueue = toNNQueue
+        self.fromNNQueue = fromNNQueue
+        self.resultsQueue = resultsQueue
+
         self.game = game
         self.nnet = nnet  # Reference to ray actor responsible for processing NN
         # self.pnet = self.nnet.__class__(self.game)  # the competitor network
@@ -292,24 +335,51 @@ class Coach:
 
                 # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 # Create the actors to run the episodes
+                # workers = []
+                # for _ in range(self.args.numCPUForMCTS):
+                #     workers.append(
+                #         ExecuteEpisodeActor.remote(self.game, self.nnet, self.args)
+                #     )
+                #
+                # pool = ray.util.ActorPool(workers)
+
                 workers = []
                 for _ in range(self.args.numCPUForMCTS):
                     workers.append(
-                        ExecuteEpisodeActor.remote(self.game, self.nnet, self.args)
+                        ExecuteEpisodeActor.remote(
+                            self.game,
+                            self.nnet,
+                            self.args,
+                            self.toNNQueue,
+                            self.fromNNQueue,
+                            self.resultsQueue,
+                        )
                     )
 
-                pool = ray.util.ActorPool(workers)
+                log.info("Starting games....")
+                # Start all of the games
+                for _ in range(self.args.numEps):
+                    ray.get(workers[0].startEpisode.remote())
 
-                # Each pool will execute BATCH_SIZE games in a session
-                for poolResult in pool.map(
-                    lambda a, v: a.executeMultipleEpisodes.remote(v),
-                    [self.args.CPUBatchSize]
-                    * int(self.args.numEps / self.args.CPUBatchSize),
-                ):
-                    # Run the episodes at once
-                    for trainingPositions in poolResult:
-                        log.info(f"New training positions {len(trainingPositions)}")
-                        iterationTrainExamples.extend(trainingPositions)
+                log.info("Done starting games")
+
+                worker_tasks = []
+                for worker in workers:
+                    worker_tasks.append(worker.loopExecuteEpisodeFromQueue.remote())
+
+                # Wait until all of the results are available
+                while self.resultsQueue.size() < self.args.numEps:
+                    time.sleep(0.5)
+
+                log.info("Games complete, stopping workers")
+
+                # Release the workers
+                del worker_tasks
+
+                # Drain the results queue
+                while not self.resultsQueue.empty():
+                    iterationTrainExamples.extend(self.resultsQueue.get())
+
                 log.info(
                     f"Self-games complete with {len(iterationTrainExamples)} positions to train from"
                 )

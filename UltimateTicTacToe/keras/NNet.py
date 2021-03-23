@@ -34,21 +34,9 @@ Based on (copy-pasted from) the NNet by SourKream and Surag Nair.
 """
 
 
-args = dotdict(
-    {
-        "lr": 0.001,
-        "dropout": 0.3,
-        "epochs": 30,
-        "batch_size": 2048,
-        "cuda": True,
-        "num_channels": 512,
-    }
-)
-
-
 @ray.remote(num_gpus=1)
 class NNetWrapper(NeuralNet):
-    def __init__(self, game):
+    def __init__(self, game, toNNQueue, fromNNQueue, resultsQueue, args):
         self.nnet = get_model(game, args)
         self.args = args
         self.board_x, self.board_y, self.board_z = game.getBoardSize()
@@ -61,6 +49,10 @@ class NNetWrapper(NeuralNet):
         self.prediction_results = None
         self.unclaimed_results = None
 
+        self.toNNQueue = toNNQueue
+        self.fromNNQueue = fromNNQueue
+        self.resultsQueue = resultsQueue
+
         self.last_prediction_time = time.time()
         self.prediction_timer_running = False
 
@@ -68,6 +60,8 @@ class NNetWrapper(NeuralNet):
         self.sem = asyncio.Semaphore(args.batch_size)
 
         self.log = logging.getLogger(self.__class__.__name__)
+
+        self.episodes_to_predict = []
 
         coloredlogs.install(level="INFO", logger=self.log)
 
@@ -99,10 +93,73 @@ class NNetWrapper(NeuralNet):
         self.nnet.fit(
             x=input_boards,
             y=[target_pis, target_vs],
-            batch_size=args.batch_size,
-            epochs=args.epochs,
+            batch_size=self.args.batch_size,
+            epochs=self.args.epochs,
             callbacks=[tensorboard_callback],
         )
+
+    def forever_watch_queue(self, cpu_batch_size):
+        while True:
+            self.get_episodes_from_queue(cpu_batch_size)
+
+    def get_episodes_from_queue(self, cpu_batch_size):
+        """
+        Gets episodes from the queue, and predicts them when there are enough.
+        """
+        # TODO: Once there are no longer enough predictions to fill a batch, a prediction run must be run anyway
+
+        pending_evaluations = np.empty((0, 3, 9, 10))
+        episodes = []
+
+        totalQueueTime = 0
+
+        episodesAppendTime = 0
+        npAppendTime = 0
+
+        t1 = time.time()
+        # Loop until there is a full batch or there are not enough unfinished games to make a full batch
+        while len(episodes) < cpu_batch_size and (
+            self.args.numEps - self.resultsQueue.size() > self.args.CPUBatchSize
+            or len(episodes) == 0
+        ):
+            q1 = time.time()
+            new_episode = self.toNNQueue.get()
+            q2 = time.time()
+
+            totalQueueTime += q2 - q1
+
+            q1 = time.time()
+
+            episodes.append(new_episode)
+            q2 = time.time()
+            episodesAppendTime += q2 - q1
+
+            q1 = time.time()
+
+            pending_evaluations = np.append(
+                pending_evaluations,
+                new_episode.mcts.canonicalBoard[np.newaxis, :, :, :],
+                axis=0,
+            )
+            q2 = time.time()
+            npAppendTime += q2 - q1
+
+        t2 = time.time()
+
+        totTime = t2 - t1
+
+        print(
+            f"Batch evaluation with {len(episodes)} eps! - Consolidating took {t2 - t1} sec - Queue % {round(totalQueueTime / totTime, 2)} - List append {round(episodesAppendTime / totTime, 2)} - NP append {round(npAppendTime / totTime, 2)}"
+        )
+        t1 = time.time()
+        results = self.predict_batch(pending_evaluations)
+        t2 = time.time()
+
+        print(f"Batch evaluation took {t2 - t1} seconds")
+        for i in range(len(episodes)):
+            ep = episodes[i]
+            ep.mcts.pi, ep.mcts.v = results[0][i], results[1][i][0]
+            self.fromNNQueue.put(ep)
 
     def predict(self, board):
         """

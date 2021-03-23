@@ -231,6 +231,7 @@ class TicTacToeGame(Game):
 
         for i in range(9):
             # Miniboards are checked for win/loss/tie on move creation. Calling check_miniboard again is unnecessary
+
             if board[0][i][9] == 1 and board[1][i][9] == 0:
                 result[0][i] = 1
             elif board[0][i][9] == 0 and board[1][i][9] == 1:
@@ -269,6 +270,8 @@ class TicTacToeGame(Game):
         """
         Returns a list of tuples in the form (board, pi) where each board and pi have have the exact same rotational transformations appplied
         """
+        board = np.copy(board)
+
         # mirror, rotational
         assert len(pi) == 81  # 81 possible moves
         # Change into 3 rows of 3 boards of 3 rows of 3 spaces

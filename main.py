@@ -5,38 +5,19 @@ from random import shuffle
 
 import coloredlogs
 import ray
+from ray.util.queue import Queue
 
 from Coach import Coach
 
 from UltimateTicTacToe import UltimateTicTacToeGame as UTicTacToe
 from UltimateTicTacToe.keras.NNet import NNetWrapper as nn
 
-from utils import *
+from args import args
+
 
 log = logging.getLogger(__name__)
 
 coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
-
-args = dotdict(
-    {
-        "numIters": 2,
-        "numEps": 768,  # Number of complete self-play games to simulate during a new iteration.
-        "tempThreshold": 15,  #
-        "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
-        "maxlenOfQueue": 500000,  # Number of game examples to train the neural networks.
-        "numMCTSSims": 25,  # Number of games moves for MCTS to simulate.
-        "arenaCompare": 60,  # Number of games to play during arena play to determine if new net will be accepted.
-        "cpuct": 1,
-        "checkpoint": "./temp/",
-        # 'load_model': False,
-        # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
-        "load_model": False,
-        "load_folder_file": ("./temp/", "best.pth.tar"),
-        "numItersForTrainExamplesHistory": 20,
-        "numCPUForMCTS": 12,  # The number of Ray actors to use to add boards to be predicted.
-        "CPUBatchSize": 64,
-    }
-)
 
 
 def main():
@@ -46,7 +27,15 @@ def main():
     g = UTicTacToe.TicTacToeGame()
 
     log.info("Loading Neural Network (Ray actor)...")
-    nnet = nn.remote(g)
+
+    toNNQueue = Queue()
+    fromNNQueue = Queue()
+    resultsQueue = Queue()
+
+    nnet = nn.remote(g, toNNQueue, fromNNQueue, resultsQueue, args)
+
+    print("WATCHING QUEUE FOR EVER")
+    nnet.forever_watch_queue.remote(args.CPUBatchSize)
 
     if args.load_model:
         log.info(
@@ -63,7 +52,8 @@ def main():
         log.warning("Not loading a checkpoint!")
 
     log.info("Loading the Coach...")
-    c = Coach(g, nnet, args)
+
+    c = Coach(g, nnet, args, toNNQueue, fromNNQueue, resultsQueue)
 
     if args.load_model:
         log.info("Loading 'trainExamples' from file...")
@@ -112,4 +102,4 @@ def model_illustrate():
 
 
 if __name__ == "__main__":
-    train_only()
+    main()

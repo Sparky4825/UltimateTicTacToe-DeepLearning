@@ -23,6 +23,8 @@ import ray
 
 import asyncio
 
+import tensorflow as tf
+
 """
 NeuralNet wrapper class for the TicTacToeNNet.
 
@@ -106,6 +108,7 @@ class NNetWrapper(NeuralNet):
 
         # run
         prediction_results = self.nnet.predict(board)
+        # prediction_results = self.nnet(board, training=False)
 
         self.log.debug(
             "SINGLE PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start)
@@ -128,7 +131,7 @@ class NNetWrapper(NeuralNet):
         # run
         prediction_results = self.nnet.predict(batch)
 
-        self.log.debug("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
+        self.log.info("PREDICTION TIME TAKEN : {0:03f}".format(time.time() - start))
         self.log.debug(f"PREDICTIONS MADE: {len(batch)}")
 
         return prediction_results
@@ -152,3 +155,16 @@ class NNetWrapper(NeuralNet):
         # if not os.path.exists(filepath):
         #     raise FileNotFoundError("No model in path '{}'".format(filepath))
         self.nnet.load_weights(filepath)
+
+    def convert_to_tflite(self):
+        """
+        Converts the model to a TensorFlow Lite model to run single predictions
+        more quickly.
+        :return:
+        """
+
+        converter = tf.lite.TFLiteConverter.from_keras_model(self.nnet)
+
+        tflite_model = converter.convert()
+
+        return tflite_model

@@ -25,11 +25,22 @@ log = logging.getLogger(__name__)
 @ray.remote
 class ExecuteEpisodeActor:
     def __init__(
-        self, game, nnet_actor, args, arena=False, p1_weights=None, p2_weights=None
+        self,
+        game,
+        nnet_actor,
+        args,
+        tfliteModel,
+        arena=False,
+        p1_weights=None,
+        p2_weights=None,
     ):
+        import tensorflow as tf
+
         self.game = game
         self.nnet_actor = nnet_actor
         self.args = args
+
+        self.interpreter = tf.lite.Interpreter(model_content=tfliteModel)
 
         # Variables to keep track of batch processing of boards
         self.batch_size = ray.get(nnet_actor.get_batch_size.remote())
@@ -251,7 +262,6 @@ class ExecuteEpisodeActor:
                         return -1 * curPlayer
                     else:
                         return 0
-
                 return [
                     (x[0], x[2], r * ((-1) ** (x[1] != curPlayer)))
                     for x in trainExamples

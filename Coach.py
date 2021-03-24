@@ -9,6 +9,7 @@ from random import shuffle
 import coloredlogs
 import numpy as np
 import ray
+from ray.util.queue import Queue
 from tqdm import tqdm
 
 from Arena import Arena
@@ -16,6 +17,7 @@ from MCTS import MCTS
 from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
 from UltimateTicTacToe.keras.NNet import args
 
+from LiteModel import LiteModel
 
 import asyncio
 
@@ -27,26 +29,26 @@ class ExecuteEpisodeActor:
     def __init__(
         self,
         game,
-        nnet_actor,
         args,
         tfliteModel,
         arena=False,
-        p1_weights=None,
-        p2_weights=None,
+        newTFliteModel=None,
     ):
         import tensorflow as tf
 
         self.game = game
-        self.nnet_actor = nnet_actor
+        self.nnet_actor = None
         self.args = args
 
-        self.interpreter = tf.lite.Interpreter(model_content=tfliteModel)
+        self.interpreter = LiteModel(tf.lite.Interpreter(model_content=tfliteModel))
 
-        # Variables to keep track of batch processing of boards
-        self.batch_size = ray.get(nnet_actor.get_batch_size.remote())
+        # If arena is set, there must be a second tflite model
+        assert not arena or newTFliteModel is not None
 
-        # Allow enough concurrent processes to fill the batch
-        self.sem = asyncio.Semaphore(self.batch_size + 5)
+        if newTFliteModel is not None:
+            self.interpreter2 = LiteModel(
+                tf.lite.Interpreter(model_content=newTFliteModel)
+            )
 
         self.prediction_timer_running = False
         self.last_prediction_time = time.time()
@@ -62,127 +64,122 @@ class ExecuteEpisodeActor:
         self.log = logging.getLogger(self.__class__.__name__)
 
         self.arena = arena
-        self.player1_weights = p1_weights
-        self.player2_weights = p2_weights
         self.current_weight_set = 1
 
         coloredlogs.install(level="INFO", logger=self.log)
 
-        if not arena:
-            asyncio.create_task(self.prediction_timer())
+    # def run_batch(self):
+    #     self.log.debug("Requesting batch prediction")
+    #     self.prediction_results = self.nnet_actor.predict_batch(
+    #         self.pending_evaluations
+    #     )
+    #
+    #     # Clear out the old boards
+    #     self.pending_evaluations = np.empty((0, 3, 9, 10))
+    #
+    #     # Add the boards need to be claimed
+    #     self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
+    #
+    #     # Tell the awaiting functions that the batch has been processed and they need to claim results
+    #     self.claim_evaluation.clear()
+    #     self.run_evaluation.set()
+    #
+    #     self.last_prediction_time = time.time()
+    #
+    #     # Flip weights back and forth every time
+    #     if self.arena:
+    #         if self.current_weight_set == 1:
+    #             self.nnet_actor.set_weights(self.player2_weights)
+    #
+    #         else:
+    #             self.nnet_actor.set_weights(self.player1_weights)
+    #
+    #         self.current_weight_set = 2 / self.current_weight_set
+    #
+    # async def prediction_timer(self):
+    #     """
+    #     Checks every second to see if the prediction timer
+    #     has run out and a prediction needs to be run, despite
+    #     not having a full batch
+    #     :return:
+    #     """
+    #
+    #     self.log.info("PREDICTION TIMER STARTED")
+    #
+    #     self.prediction_timer_running = True
+    #
+    #     while self.prediction_timer_running:
+    #         self.log.debug("Checking if prediction is needed")
+    #         if (
+    #             time.time() > self.last_prediction_time + 2
+    #             and len(self.pending_evaluations) > 0
+    #         ):
+    #             self.log.info("Prediction is needed")
+    #             self.run_batch()
+    #
+    #         else:
+    #             self.log.debug(
+    #                 f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
+    #             )
+    #             await asyncio.sleep(2)
+    #
+    # async def request_prediction(self, board):
+    #     """
+    #     Adds the given board to be evaluated on the GPU with the next batch.
+    #     Then it awaits for the result.
+    #     :param board:
+    #     :return:
+    #     """
+    #
+    #     self.log.debug(
+    #         f"Requesting prediction {len(self.pending_evaluations)} {self.batch_size}"
+    #     )
+    #
+    #     async with self.sem:
+    #         # Update the timer every time a new prediction is requested
+    #         self.last_prediction_time = time.time()
+    #
+    #         if self.run_evaluation.is_set():
+    #             self.log.debug(
+    #                 "Waiting for another process to claim results to add prediction"
+    #             )
+    #             self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
+    #             await self.claim_evaluation.wait()
+    #
+    #         # Add the board to the list of predictions to be made
+    #         self.pending_evaluations = np.append(
+    #             self.pending_evaluations, board[np.newaxis, :, :], axis=0
+    #         )
+    #
+    #         # Save the board index locally to remember which results go with this board after predictions are calculated
+    #         board_index = len(self.pending_evaluations) - 1
+    #
+    #         # Check if its time to run a batch
+    #         if len(self.pending_evaluations) >= self.batch_size:
+    #             self.run_batch()
+    #
+    #         else:
+    #             # Wait until the predictions have been made
+    #             await self.run_evaluation.wait()
+    #
+    #         # Get and return the results
+    #         self.log.debug(f"Prediction results: {self.prediction_results}")
+    #         pi, v = (
+    #             self.prediction_results[0][board_index],
+    #             self.prediction_results[1][board_index],
+    #         )
+    #         self.unclaimed_results[board_index] = 0
+    #
+    #         # Check if all the results have been claimed
+    #         if not np.any(self.unclaimed_results):
+    #
+    #             # If they have, allow the next set of boards to be setup
+    #             self.claim_evaluation.set()
+    #             self.run_evaluation.clear()
+    #
+    #         return pi, v
 
-    def run_batch(self):
-        self.log.debug("Requesting batch prediction")
-        self.prediction_results = ray.get(
-            self.nnet_actor.predict_batch.remote(self.pending_evaluations)
-        )
-
-        # Clear out the old boards
-        self.pending_evaluations = np.empty((0, 3, 9, 10))
-
-        # Add the boards need to be claimed
-        self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
-
-        # Tell the awaiting functions that the batch has been processed and they need to claim results
-        self.claim_evaluation.clear()
-        self.run_evaluation.set()
-
-        self.last_prediction_time = time.time()
-
-        # Flip weights back and forth every time
-        if self.arena:
-            if self.current_weight_set == 1:
-                ray.get(self.nnet_actor.set_weights.remote(self.player2_weights))
-
-            else:
-                ray.get(self.nnet_actor.set_weights.remote(self.player1_weights))
-
-            self.current_weight_set = 2 / self.current_weight_set
-
-    async def prediction_timer(self):
-        """
-        Checks every second to see if the prediction timer
-        has run out and a prediction needs to be run, despite
-        not having a full batch
-        :return:
-        """
-
-        self.log.info("PREDICTION TIMER STARTED")
-
-        self.prediction_timer_running = True
-
-        while self.prediction_timer_running:
-            self.log.debug("Checking if prediction is needed")
-            if (
-                time.time() > self.last_prediction_time + 2
-                and len(self.pending_evaluations) > 0
-            ):
-                self.log.info("Prediction is needed")
-                self.run_batch()
-
-            else:
-                self.log.debug(
-                    f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
-                )
-                await asyncio.sleep(2)
-
-    async def request_prediction(self, board):
-        """
-        Adds the given board to be evaluated on the GPU with the next batch.
-        Then it awaits for the result.
-        :param board:
-        :return:
-        """
-
-        self.log.debug(
-            f"Requesting prediction {len(self.pending_evaluations)} {self.batch_size}"
-        )
-
-        async with self.sem:
-            # Update the timer every time a new prediction is requested
-            self.last_prediction_time = time.time()
-
-            if self.run_evaluation.is_set():
-                self.log.debug(
-                    "Waiting for another process to claim results to add prediction"
-                )
-                self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
-                await self.claim_evaluation.wait()
-
-            # Add the board to the list of predictions to be made
-            self.pending_evaluations = np.append(
-                self.pending_evaluations, board[np.newaxis, :, :], axis=0
-            )
-
-            # Save the board index locally to remember which results go with this board after predictions are calculated
-            board_index = len(self.pending_evaluations) - 1
-
-            # Check if its time to run a batch
-            if len(self.pending_evaluations) >= self.batch_size:
-                self.run_batch()
-
-            else:
-                # Wait until the predictions have been made
-                await self.run_evaluation.wait()
-
-            # Get and return the results
-            self.log.debug(f"Prediction results: {self.prediction_results}")
-            pi, v = (
-                self.prediction_results[0][board_index],
-                self.prediction_results[1][board_index],
-            )
-            self.unclaimed_results[board_index] = 0
-
-            # Check if all the results have been claimed
-            if not np.any(self.unclaimed_results):
-
-                # If they have, allow the next set of boards to be setup
-                self.claim_evaluation.set()
-                self.run_evaluation.clear()
-
-            return pi, v
-
-    async def executeMultipleEpisodes(self, num_episodes):
+    def executeMultipleEpisodes(self, num_episodes):
         """
         Will start multiple executeEpisodes at once, concurrently.
         :param num_episodes:
@@ -192,9 +189,13 @@ class ExecuteEpisodeActor:
         # Update batch size to the correct size (default is equal to training value for NN)
         self.batch_size = num_episodes
 
-        group = await asyncio.gather(
-            *[self.executeEpisode() for _ in range(int(num_episodes))]
-        )
+        group = []
+        for i in range(int(num_episodes)):
+            group.append(self.executeEpisode())
+
+        # group = await asyncio.gather(
+        #     *[self.executeEpisode() for _ in range(int(num_episodes))]
+        # )
 
         if not self.arena:
             return group
@@ -202,7 +203,12 @@ class ExecuteEpisodeActor:
         else:
             return [group.count(1), group.count(-1), group.count(0)]
 
-    async def executeEpisode(self):
+    def executeEpisodesFromQueue(self, queue, results):
+        while not queue.empty():
+            queue.get()
+            results.put(self.executeEpisode())
+
+    def executeEpisode(self):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -226,7 +232,22 @@ class ExecuteEpisodeActor:
         curPlayer = 1
         episodeStep = 0
 
-        mcts = MCTS(self, self.game, self.nnet_actor, self.args)
+        mcts = MCTS(
+            self,
+            self.game,
+            None,
+            self.args,
+            self.interpreter,
+        )
+
+        if self.arena:
+            mcts2 = MCTS(
+                self,
+                self.game,
+                None,
+                self.args,
+                self.interpreter2,
+            )
 
         while True:
             episodeStep += 1
@@ -237,7 +258,11 @@ class ExecuteEpisodeActor:
             else:
                 temp = 0
 
-            pi = await mcts.getActionProb(canonicalBoard, temp=temp)
+            # Use the correct tree
+            if not self.arena or curPlayer == 1:
+                pi = mcts.getActionProb(canonicalBoard, temp=temp)
+            else:
+                pi = mcts2.getActionProb(canonicalBoard, temp=temp)
 
             if not self.arena:
                 sym = self.game.getSymmetries(canonicalBoard, pi)
@@ -250,10 +275,8 @@ class ExecuteEpisodeActor:
             r = self.game.getGameEnded(board, curPlayer)
 
             if r != 0:
-                self.batch_size -= (
-                    1  # No longer wait for this game to be present in batch
-                )
-                print(f"GAME COMPLETE - {self.batch_size} remaining")
+
+                # print(f"GAME COMPLETE - {self.batch_size} remaining")
 
                 if self.arena:
                     if r == 1:
@@ -283,6 +306,36 @@ class Coach:
             []
         )  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
+        self.log = logging.getLogger(self.__class__.__name__)
+        coloredlogs.install(level="INFO", logger=self.log)
+
+    def runEpisodes(
+        self, remainingGamesQueue, resultsQueue, arena, numEps, numCPU, *args
+    ):
+        workers = []
+        for _ in range(numCPU):
+            workers.append(ExecuteEpisodeActor.remote(*args))
+
+        for _ in range(self.args.numEps):
+            remainingGamesQueue.put(1)
+
+        for worker in workers:
+            worker.executeEpisodesFromQueue.remote(remainingGamesQueue, resultsQueue)
+        results = []
+
+        for _ in tqdm(range(numEps)):
+            if arena:
+                results.append(resultsQueue.get())
+            else:
+                results.extend(resultsQueue.get())
+
+        for worker in workers:
+            ray.kill(worker)
+
+        if arena:
+            return [results.count(1), results.count(-1), results.count(0)]
+
+        return results
 
     def learn(self):
         """
@@ -296,37 +349,35 @@ class Coach:
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f"Starting Iter #{i} ...")
+
+            self.log.info("Creating TF-Lite model")
+            tflite_model = self.nnet.convert_to_tflite()
+            self.log.info("TF-Lite model done")
+
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
                 # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 # Create the actors to run the episodes
-                workers = []
-                for _ in range(self.args.numCPUForMCTS):
-                    workers.append(
-                        ExecuteEpisodeActor.remote(self.game, self.nnet, self.args)
-                    )
 
-                pool = ray.util.ActorPool(workers)
+                gamesQueue = Queue()
+                resultsQueue = Queue()
 
-                # Each pool will execute BATCH_SIZE games in a session
-                for poolResult in pool.map(
-                    lambda a, v: a.executeMultipleEpisodes.remote(v),
-                    [self.args.CPUBatchSize]
-                    * int(self.args.numEps / self.args.CPUBatchSize),
-                ):
-                    # Run the episodes at once
-                    for trainingPositions in poolResult:
-                        log.info(f"New training positions {len(trainingPositions)}")
-                        iterationTrainExamples.extend(trainingPositions)
+                iterationTrainExamples = self.runEpisodes(
+                    gamesQueue,
+                    resultsQueue,
+                    False,
+                    self.args.numEps,
+                    self.args.numCPUForMCTS,
+                    self.game,
+                    self.args,
+                    tflite_model,
+                )
+
                 log.info(
                     f"Self-games complete with {len(iterationTrainExamples)} positions to train from"
                 )
-
-                # Kill the workers because they are no longer needed
-                for worker in workers:
-                    ray.kill(worker)
 
                 # save the iteration examples to the history
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -352,23 +403,30 @@ class Coach:
             log.info(f"About to begin training with {len(trainExamples)} samples")
 
             # training new network, keeping a copy of the old one
-            previous_weights = ray.get(self.nnet.get_weights.remote())
+            previous_weights = self.nnet.get_weights()
 
-            ray.get(
-                self.nnet.save_checkpoint.remote(
-                    folder=self.args.checkpoint, filename="temp.pth.tar"
-                )
+            self.nnet.save_checkpoint(
+                folder=self.args.checkpoint, filename="temp.pth.tar"
             )
+
             # self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
 
             # previous_player = NNetPlayer(
             #     self.game, self.nnet, previous_weights, self.args
             # )
 
-            ray.get(self.nnet.train.remote(trainExamples))
+            self.nnet.train(trainExamples)
+
+            # Release the RAM for use in the arena competition
+            del trainExamples
+
             log.info("TRAINING COMPLETE")
 
-            new_weights = ray.get(self.nnet.get_weights.remote())
+            log.info("Creating new TF-Lite model")
+            new_tflite_model = self.nnet.convert_to_tflite()
+            self.log.info("TF-Lite model done")
+
+            new_weights = self.nnet.get_weights()
 
             # new_player = NNetPlayer(self.game, self.nnet, new_weights, self.args)
 
@@ -381,33 +439,39 @@ class Coach:
 
             # Have both models play as both sides
             log.info("Starting Arena round 1")
-            arenaActor1 = ExecuteEpisodeActor.remote(
+
+            gamesQueue = Queue()
+            resultsQueue = Queue()
+
+            pwins1, nwins1, draws1 = self.runEpisodes(
+                gamesQueue,
+                resultsQueue,
+                True,
+                self.args.arenaCompare,
+                self.args.numCPUForMCTS,
                 self.game,
-                self.nnet,
                 self.args,
-                arena=True,
-                p1_weights=previous_weights,
-                p2_weights=new_weights,
+                tflite_model,
+                True,
+                new_tflite_model,
             )
-
-            pwins1, nwins1, draws1 = ray.get(
-                arenaActor1.executeMultipleEpisodes.remote(self.args.arenaCompare / 2)
-            )
-
-            ray.kill(arenaActor1)
 
             log.info("Starting Arena round 2")
-            arenaActor2 = ExecuteEpisodeActor.remote(
-                self.game,
-                self.nnet,
-                self.args,
-                arena=True,
-                p1_weights=new_weights,
-                p2_weights=previous_weights,
-            )
 
-            nwins2, pwins2, draws2 = ray.get(
-                arenaActor2.executeMultipleEpisodes.remote(self.args.arenaCompare / 2)
+            gamesQueue = Queue()
+            resultsQueue = Queue()
+
+            nwins2, pwins2, draws2 = self.runEpisodes(
+                gamesQueue,
+                resultsQueue,
+                True,
+                self.args.arenaCompare,
+                self.args.numCPUForMCTS,
+                self.game,
+                self.args,
+                new_tflite_model,
+                True,
+                tflite_model,
             )
 
             pwins = pwins1 + pwins2
@@ -420,15 +484,13 @@ class Coach:
                 or float(nwins) / (pwins + nwins) < self.args.updateThreshold
             ):
                 log.info("REJECTING NEW MODEL")
-                ray.get(self.nnet.set_weights.remote(previous_weights))
+                self.nnet.set_weights(previous_weights)
             else:
                 log.info("ACCEPTING NEW MODEL")
-                ray.get(self.nnet.set_weights.remote(previous_weights))
+                self.nnet.set_weights(new_weights)
 
-                ray.get(
-                    self.nnet.save_checkpoint.remote(
-                        folder=self.args.checkpoint, filename="best.pth.tar"
-                    )
+                self.nnet.save_checkpoint(
+                    folder=self.args.checkpoint, filename="best.pth.tar"
                 )
 
     def getCheckpointFile(self, iteration):

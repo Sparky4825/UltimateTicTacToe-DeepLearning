@@ -40,14 +40,13 @@ args = dotdict(
         "lr": 0.001,
         "dropout": 0.3,
         "epochs": 30,
-        "batch_size": 1024,
+        "batch_size": 2000,
         "cuda": True,
         "num_channels": 512,
     }
 )
 
 
-@ray.remote(num_gpus=1)
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
         self.nnet = get_model(game, args)
@@ -164,6 +163,8 @@ class NNetWrapper(NeuralNet):
         """
 
         converter = tf.lite.TFLiteConverter.from_keras_model(self.nnet)
+
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
         tflite_model = converter.convert()
 

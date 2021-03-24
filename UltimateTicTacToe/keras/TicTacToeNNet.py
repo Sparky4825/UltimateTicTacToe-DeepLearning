@@ -40,18 +40,18 @@ def get_model(game, args):
 
     # First pass though 2 layers with only one node per spot (plus 1 for won boards)
 
-    dense1 = Dense(900, activation="relu")(input_boards)
+    dense1 = Dense(750, activation="relu")(input_boards)
 
-    dense2 = Dense(900, activation="relu")(dense1)
+    dense2 = Dense(750, activation="relu")(dense1)
 
     resize = Flatten()(dense2)
 
-    num_dense_layers = 20
+    num_dense_layers = 7
 
     previous_layer = resize
 
     for i in range(num_dense_layers):
-        previous_layer = Dense(900, activation="relu")(previous_layer)
+        previous_layer = Dense(750, activation="relu")(previous_layer)
         previous_layer = BatchNormalization()(previous_layer)
 
         # Add dropout layer every other

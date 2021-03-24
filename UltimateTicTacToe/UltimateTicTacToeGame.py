@@ -271,6 +271,7 @@ class TicTacToeGame(Game):
         """
         Returns a list of tuples in the form (board, pi) where each board and pi have have the exact same rotational transformations appplied
         """
+
         # mirror, rotational
         assert len(pi) == 81  # 81 possible moves
         # Change into 3 rows of 3 boards of 3 rows of 3 spaces
@@ -292,34 +293,34 @@ class TicTacToeGame(Game):
             for j in [False, True]:
 
                 # Each miniboard must be rotated in place, and then the larger board rotated
-                newB = np.rot90(b, i, axes=(3, 4))
+                newB = np.copy(np.rot90(b, i, axes=(3, 4)))
                 newB = np.rot90(newB, i, axes=(1, 2))
 
                 # Same as above, but axes are all 1 less b/c there is only one layer and not three
-                newPi = np.rot90(pi_board, i, axes=(2, 3))
+                newPi = np.copy(np.rot90(pi_board, i, axes=(2, 3)))
                 newPi = np.rot90(newPi, i, axes=(0, 1))
 
-                newW = np.rot90(w, i, axes=(1, 2))
+                newW = np.copy(np.rot90(w, i, axes=(1, 2)))
 
                 if j:
                     for flip_row_index in range(3):
                         for flip_miniboard_index in range(3):
 
                             # Flip the pieces in each miniboard
-                            newB[0][flip_row_index][flip_miniboard_index] = np.flipud(
+                            newB[0][flip_row_index][flip_miniboard_index] = np.fliplr(
                                 newB[0][flip_row_index][flip_miniboard_index]
                             )
-                            newB[1][flip_row_index][flip_miniboard_index] = np.flipud(
+                            newB[1][flip_row_index][flip_miniboard_index] = np.fliplr(
                                 newB[1][flip_row_index][flip_miniboard_index]
                             )
-                            newB[2][flip_row_index][flip_miniboard_index] = np.flipud(
+                            newB[2][flip_row_index][flip_miniboard_index] = np.fliplr(
                                 newB[2][flip_row_index][flip_miniboard_index]
                             )
 
                         # Flip each miniboard in whole board
-                        newB = np.flip(newB, axis=1)
-                        newPi = np.flip(newPi, axis=0)
-                        newW = np.flip(newW, axis=0)
+                        newB = np.flip(newB, axis=2)
+                        newPi = np.flip(newPi, axis=1)
+                        newW = np.flip(newW, axis=1)
 
                 newB = np.reshape(newB, (3, 9, 9))
                 newW = np.reshape(newW, (3, 9, 1))

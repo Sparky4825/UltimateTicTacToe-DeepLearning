@@ -75,9 +75,16 @@ class TestUltimateTicTacToeGame(unittest.TestCase):
         b, _ = self.g.getNextState(b, 1, 1)
         b, _ = self.g.getNextState(b, -1, 12)
 
+        pi = np.zeros(81)
+
+        pi[1] = 1
+
         self.g.display(b)
-        for sym, pi in self.g.getSymmetries(b, [0] * 81):
+        for sym, pi in self.g.getSymmetries(b, pi):
             self.g.display(sym)
+            print(pi)
+            print(np.where(np.array(pi) == 1)[0])
+            print(np.where(sym[0][np.where(sym[0] == 1)[0]] == 1))
 
     def test_check_miniboard(self):
         test_value = np.zeros((2, 10))

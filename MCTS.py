@@ -64,6 +64,15 @@ class MCTS:
             for a in range(self.game.getActionSize())
         ]
 
+        for index in range(len(counts)):
+            if counts[index] >= 1 and canonicalBoard[2][int(index / 9)][index % 9] == 0:
+                self.log.warning("MCTS suggesting invalid move")
+                self.log.warning("Board: " + str(canonicalBoard))
+                self.log.warning("COUNTS " + str(counts))
+                self.game.display(canonicalBoard)
+                self.log.warning(self.game.getValidMoves(canonicalBoard, 1))
+                break
+
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
             bestA = np.random.choice(bestAs)

@@ -346,6 +346,8 @@ class Coach:
         only if it wins >= updateThreshold fraction of games.
         """
 
+        # TODO: POTENTIAL BUG IN TRAINING EXAMPLES BEING PASSED TO THE MODEL, THE LAYER THAT SHOWS ALLOWED MOVES IS NOT WORKING CORRECTLY; INVESTIGATE
+
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f"Starting Iter #{i} ...")
@@ -400,7 +402,18 @@ class Coach:
                 trainExamples.extend(e)
 
             for j in range(1000):
-                print(trainExamples[j])
+                counts = trainExamples[j][1]
+                board = trainExamples[j][0]
+
+                for index in range(len(counts)):
+                    if counts[index] >= 1 and board[2][int(index / 9)][index % 9] == 0:
+                        self.log.warning("MCTS suggesting invalid move")
+                        self.log.warning(trainExamples[j])
+                        self.log.warning("Board: " + str(board))
+                        self.log.warning("COUNTS " + str(counts))
+                        self.game.display(board)
+                        self.log.warning(self.game.getValidMoves(board, 1))
+                        break
 
             # TODO: Reduce the number of draws in training examples because they confuse the network
             shuffle(trainExamples)
@@ -424,7 +437,7 @@ class Coach:
 
             # Release the RAM for use in the arena competition
             del trainExamples
-            self.trainExamplesHistory.pop(0)
+            # self.trainExamplesHistory.pop(0)
             # TODO: this must be changed to ever use training examples from the past
 
             log.info("TRAINING COMPLETE")

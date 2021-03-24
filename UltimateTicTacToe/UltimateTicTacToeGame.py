@@ -216,10 +216,12 @@ class TicTacToeGame(Game):
         Returns a numpy array of size (81) where 0 indicates that action is not allowed in that square and 1 indicates action is allowed in that square
         """
         # For a move to be valid, b[0] and b[1] at that move must be 0 and b[2] at that move must be 1
-        # Cut off the won/lost/tie board markers
-        board = board[:, :, :-1]
+
         result = np.invert(np.logical_or(board[0], board[1]))
         result = np.logical_and(result, board[2])
+
+        # Cut off the won/lost/tie board markers
+        result = result[:, :-1]
 
         # Convert to a 1d array
         return result.flatten().astype("int")
@@ -287,7 +289,7 @@ class TicTacToeGame(Game):
         # Four possible degrees of rotation
         for i in range(1, 5):
             # Each rotation may be either reflected or not
-            for j in [True, False]:
+            for j in [False, True]:
 
                 # Each miniboard must be rotated in place, and then the larger board rotated
                 newB = np.rot90(b, i, axes=(3, 4))
@@ -304,23 +306,23 @@ class TicTacToeGame(Game):
                         for flip_miniboard_index in range(3):
 
                             # Flip the pieces in each miniboard
-                            newB[0][flip_row_index][flip_miniboard_index] = np.fliplr(
+                            newB[0][flip_row_index][flip_miniboard_index] = np.flipud(
                                 newB[0][flip_row_index][flip_miniboard_index]
                             )
-                            newB[1][flip_row_index][flip_miniboard_index] = np.fliplr(
+                            newB[1][flip_row_index][flip_miniboard_index] = np.flipud(
                                 newB[1][flip_row_index][flip_miniboard_index]
                             )
-                            newB[2][flip_row_index][flip_miniboard_index] = np.fliplr(
-                                newB[1][flip_row_index][flip_miniboard_index]
+                            newB[2][flip_row_index][flip_miniboard_index] = np.flipud(
+                                newB[2][flip_row_index][flip_miniboard_index]
                             )
 
-                    # Flip each miniboard in whole board
-                    newB = np.fliplr(newB)
-                    newPi = np.fliplr(newPi)
-                    newW = np.fliplr(newW)
+                        # Flip each miniboard in whole board
+                        newB = np.flip(newB, axis=1)
+                        newPi = np.flip(newPi, axis=0)
+                        newW = np.flip(newW, axis=0)
 
                 newB = np.reshape(newB, (3, 9, 9))
-                newW = np.reshape(w, (3, 9, 1))
+                newW = np.reshape(newW, (3, 9, 1))
 
                 # Add the won/lost markers in
                 newB = np.append(newB, newW, axis=2)

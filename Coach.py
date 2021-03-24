@@ -223,7 +223,7 @@ class ExecuteEpisodeActor:
         The function assumes that the weights will be shifted in between predictions.
 
         Returns:
-            trainExamples: a list of examples of the form (canonicalBoard, currPlayer, pi,v)
+            trainExamples: a list of examples of the form (canonicalBoard, pi,v)
                            pi is the MCTS informed policy vector, v is +1 if
                            the player eventually won the game, else -1.
         """
@@ -323,7 +323,7 @@ class Coach:
             worker.executeEpisodesFromQueue.remote(remainingGamesQueue, resultsQueue)
         results = []
 
-        for _ in tqdm(range(numEps)):
+        for _ in tqdm(range(numEps), desc="Playing games"):
             if arena:
                 results.append(resultsQueue.get())
             else:
@@ -398,6 +398,11 @@ class Coach:
             trainExamples = []
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
+
+            for j in range(1000):
+                print(trainExamples[j])
+
+            # TODO: Reduce the number of draws in training examples because they confuse the network
             shuffle(trainExamples)
 
             log.info(f"About to begin training with {len(trainExamples)} samples")
@@ -419,6 +424,8 @@ class Coach:
 
             # Release the RAM for use in the arena competition
             del trainExamples
+            self.trainExamplesHistory.pop(0)
+            # TODO: this must be changed to ever use training examples from the past
 
             log.info("TRAINING COMPLETE")
 

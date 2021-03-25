@@ -1,4 +1,6 @@
 import logging
+from pickle import Unpickler
+from random import shuffle
 
 import coloredlogs
 import ray
@@ -21,11 +23,11 @@ coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 args = dotdict(
     {
         "numIters": 1000,
-        "numEps": 200,  # Number of complete self-play games to simulate during a new iteration.
+        "numEps": 300,  # Number of complete self-play games to simulate during a new iteration.
         "tempThreshold": 15,  #
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 500000,  # Number of game examples to train the neural networks.
-        "numMCTSSims": 25,  # Number of games moves for MCTS to simulate.
+        "numMCTSSims": 500,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 40,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 1,
         "checkpoint": "./temp/",
@@ -33,7 +35,7 @@ args = dotdict(
         # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
         "load_model": False,
         "load_folder_file": ("./temp/", "best.pth.tar"),
-        "numItersForTrainExamplesHistory": 5,
+        "numItersForTrainExamplesHistory": 2,
         "numCPUForMCTS": 12,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 64,
     }
@@ -108,6 +110,44 @@ def tflite_test():
     print(f"TF LITE TIME: {timer() - start_time:.6f} seconds")
     print(pi)
     print(v)
+
+
+def model_illustrate():
+    ray.init()
+
+    g = UTicTacToe.TicTacToeGame()
+
+    nnet = nn(g)
+
+    print(nnet.model_summary())
+
+
+def train_only():
+
+    ray.init()
+
+    log.info("Loading %s...", UTicTacToe.TicTacToeGame.__name__)
+    g = UTicTacToe.TicTacToeGame()
+
+    log.info("Loading Neural Network (Ray actor)...")
+    nnet = nn(g)
+
+    # modelFile = os.path.join(args.load_folder_file[0], args.load_folder_file[1])
+    examplesFile = "temp/checkpoint_0.pth.tar.examples"
+
+    with open(examplesFile, "rb") as f:
+        trainExamplesHistory = Unpickler(f).load()
+
+    trainExamples = []
+    for e in trainExamplesHistory:
+        trainExamples.extend(e)
+    shuffle(trainExamples)
+
+    trainExamples = trainExamples[:120000]
+
+    log.info(f"About to begin training with {len(trainExamples)} samples")
+
+    nnet.train(trainExamples)
 
 
 def main():

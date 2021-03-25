@@ -206,9 +206,9 @@ class ExecuteEpisodeActor:
     def executeEpisodesFromQueue(self, queue, results):
         while not queue.empty():
             queue.get()
-            results.put(self.executeEpisode())
+            results.put(self.executeEpisode(useNNPolicy=False))
 
-    def executeEpisode(self):
+    def executeEpisode(self, useNNPolicy=True):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -260,9 +260,13 @@ class ExecuteEpisodeActor:
 
             # Use the correct tree
             if not self.arena or curPlayer == 1:
-                pi = mcts.getActionProb(canonicalBoard, temp=temp)
+                pi = mcts.getActionProb(
+                    canonicalBoard, temp=temp, useNNPolicy=useNNPolicy
+                )
             else:
-                pi = mcts2.getActionProb(canonicalBoard, temp=temp)
+                pi = mcts2.getActionProb(
+                    canonicalBoard, temp=temp, useNNPolicy=useNNPolicy
+                )
 
             if not self.arena:
                 sym = self.game.getSymmetries(canonicalBoard, pi)

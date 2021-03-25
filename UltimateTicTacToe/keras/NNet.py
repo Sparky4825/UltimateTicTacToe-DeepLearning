@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import os
 import shutil
@@ -39,7 +40,7 @@ args = dotdict(
     {
         "lr": 0.001,
         "dropout": 0.3,
-        "epochs": 25,
+        "epochs": 30,
         "batch_size": 2000,
         "cuda": True,
         "num_channels": 512,
@@ -84,15 +85,32 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
+        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=log_dir, histogram_freq=1
+        )
+
+        validate = examples[:1000]
+        examples = examples[1000:]
+
         input_boards, target_pis, target_vs = list(zip(*examples))
+        validate_boards, val_pis, val_vs = list(zip(*validate))
+
         input_boards = np.asarray(input_boards)
         target_pis = np.asarray(target_pis)
         target_vs = np.asarray(target_vs)
+
+        validate_boards = np.asarray(validate_boards)
+        val_pis = np.asarray(val_pis)
+        val_vs = np.asarray(val_vs)
+
         self.nnet.fit(
             x=input_boards,
             y=[target_pis, target_vs],
             batch_size=args.batch_size,
             epochs=args.epochs,
+            callbacks=[tensorboard_callback],
+            validation_data=(validate_boards, [val_pis, val_vs]),
         )
 
     def predict(self, board):
@@ -169,3 +187,6 @@ class NNetWrapper(NeuralNet):
         tflite_model = converter.convert()
 
         return tflite_model
+
+    def model_summary(self):
+        return self.nnet.summary(line_length=225)

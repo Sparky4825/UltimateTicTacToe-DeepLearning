@@ -40,34 +40,40 @@ def get_model(game, args):
 
     # First pass though 2 layers with only one node per spot (plus 1 for won boards)
 
-    dense1 = Dense(750, activation="relu")(input_boards)
+    dense1 = Dense(100, activation="relu")(input_boards)
 
-    dense2 = Dense(750, activation="relu")(dense1)
+    dense2 = Dense(100, activation="relu")(dense1)
 
     resize = Flatten()(dense2)
 
-    num_dense_layers = 7
+    num_dense_layers = 2
 
     previous_layer = resize
 
     for i in range(num_dense_layers):
-        previous_layer = Dense(750, activation="relu")(previous_layer)
+        previous_layer = Dense(100, activation="relu")(previous_layer)
         previous_layer = BatchNormalization()(previous_layer)
 
         # Add dropout layer every other
-        # if i % 2 == 0:
-        #     previous_layer = Dropout(args.dropout)(previous_layer)
+        if i % 2 == 0:
+            previous_layer = Dropout(args.dropout)(previous_layer)
 
     final_dense_layer = previous_layer
 
+    # Give the pi output some unique layers to learn from
+    pilayer1 = Dense(100, activation="relu", kernel_regularizer="l1")(final_dense_layer)
+    pilayer2 = Dense(100, activation="relu", kernel_regularizer="l1")(pilayer1)
+
     pi = Dense(action_size, activation="softmax", name="pi")(
-        final_dense_layer
+        pilayer2
     )  # batch_size x action_size
     v = Dense(1, activation="tanh", name="v")(final_dense_layer)  # batch_size x 1
 
     model = Model(inputs=input_boards, outputs=[pi, v])
     model.compile(
-        loss=["categorical_crossentropy", "mean_squared_error"], optimizer=Adam(args.lr)
+        loss=["categorical_crossentropy", "mean_squared_error"],
+        optimizer=Adam(args.lr),
+        metrics=["accuracy"],
     )
 
     return model

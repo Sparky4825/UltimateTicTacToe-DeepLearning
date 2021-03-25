@@ -46,7 +46,7 @@ class MCTS:
 
         coloredlogs.install(level="INFO", logger=self.log)
 
-    def getActionProb(self, canonicalBoard, temp=1):
+    def getActionProb(self, canonicalBoard, temp=1, useNNPolicy=True):
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
@@ -56,7 +56,7 @@ class MCTS:
                    proportional to Nsa[(s,a)]**(1./temp)
         """
         for i in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+            self.search(canonicalBoard, useNNPolicy)
 
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [
@@ -85,7 +85,7 @@ class MCTS:
         probs = [x / counts_sum for x in counts]
         return probs
 
-    def search(self, canonicalBoard):
+    def search(self, canonicalBoard, useNNPolicy=True):
         """
         This function performs one iteration of MCTS. It is recursively called
         till a leaf node is found. The action chosen at each node is one that
@@ -130,17 +130,24 @@ class MCTS:
                 self.Ps[s], v = ray.get(self.nnet.predict.remote(canonicalBoard))
 
             valids = self.game.getValidMoves(canonicalBoard, 1)
-            self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
-            sum_Ps_s = np.sum(self.Ps[s])
-            if sum_Ps_s > 0:
-                self.Ps[s] /= sum_Ps_s  # renormalize
-            else:
-                # if all valid moves were masked make all valid moves equally probable
+            if useNNPolicy:
+                self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
+                sum_Ps_s = np.sum(self.Ps[s])
+                if sum_Ps_s > 0:
+                    self.Ps[s] /= sum_Ps_s  # renormalize
+                else:
+                    # if all valid moves were masked make all valid moves equally probable
 
-                # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
-                # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.
-                log.error("All valid moves were masked, doing a workaround.")
-                # self.game.display(canonicalBoard)
+                    # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
+                    # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.
+                    log.error("All valid moves were masked, doing a workaround.")
+                    # self.game.display(canonicalBoard)
+                    self.Ps[s] = self.Ps[s] + valids
+                    self.Ps[s] /= np.sum(self.Ps[s])
+
+            # Don't use the NNet policy (because it isn't trained enough yet) just pick random valid moves
+            else:
+                self.Ps[s] = self.Ps[s] * 0
                 self.Ps[s] = self.Ps[s] + valids
                 self.Ps[s] /= np.sum(self.Ps[s])
 
@@ -172,7 +179,7 @@ class MCTS:
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
-        v = self.search(next_s)
+        v = self.search(next_s, useNNPolicy)
 
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (

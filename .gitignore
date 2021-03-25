@@ -12,3 +12,10 @@ checkpoints/
 .idea/
 
 logs/
+
+# C++ stuff
+*.pyd
+*.obj
+*.lib
+*.html
+*.exp

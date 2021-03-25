@@ -13,10 +13,15 @@ cdef float minimax(Node& node, int depth, float alpha, float beta, evaluate):
     # When a forced loss position is evaluated before a forced win position
     cdef int resetInfDepth = 0
 
+    cdef vector[int] canonical
+    cdef np.ndarray[np.int8_t, ndim=1] nparray
 
     # Check if depth reached or game over
     if (depth <= 0 or node.board.getStatus() != 0):
-        bestEval = evaluate(node.getCanonicalBoard())
+        canonical = node.board.getCanonicalBoard()
+        nparray = np.asarray(canonical, dtype=np.int8)
+
+        bestEval = evaluate(nparray)
 
         # Check if infinite (ie greater than evaluate bounds)
         if (bestEval > 1 or bestEval < -1):
@@ -58,7 +63,7 @@ cdef float minimax(Node& node, int depth, float alpha, float beta, evaluate):
     return bestEval * -1
     
 
-def minimaxSearch(PyGameState position, int depth):
+def minimaxSearch(PyGameState position, int depth, evaluate):
     cdef Node start = Node(position.c_gamestate, 0)
 
     start.addChildren()
@@ -68,12 +73,6 @@ def minimaxSearch(PyGameState position, int depth):
     cdef float bestEval = -1000
     cdef float newEval
     cdef Node bestMove = start.children[0]
-    cdef int evalMultiplier
-
-    if start.board.getToMove() == 1:
-        evalMultiplier = 1
-    else:
-        evalMultiplier = -1
 
     cdef int shortestWinDepth, longestLoseDepth
     cdef Node winNode, loseNode
@@ -83,7 +82,7 @@ def minimaxSearch(PyGameState position, int depth):
 
     cdef Node i
     for i in start.children:
-        newEval = minimax(i, depth - 1, -1000, 1000, 0)
+        newEval = minimax(i, depth - 1, -100, 100, evaluate)
 
         # Get best eval
         if newEval > bestEval:
@@ -113,7 +112,80 @@ def minimaxSearch(PyGameState position, int depth):
 
     return finalState
 
+
+def getActionProbabilities(PyGameState position, int depth, evaluate, int temp=1):
+    cdef Node start = Node(position.c_gamestate, 0)
+
+    start.addChildren()
     
+    # Store move evaluations
+    cdef np.ndarray[np.float, ndim=1] moves = np.zeros(81, dtype=np.float)
+    cdef float [:] movesMem = moves
+
+    cdef float newEval, bestEval, total, minimum
+    bestEval = -1000
+
+    cdef int shortestWinDepth, longestLoseDepth, index
+    cdef Node winNode, loseNode
+    # Max number of moves is 81, so 100 is always larger
+    shortestWinDepth = 100
+    longestLoseDepth = 0
+
+    cdef Node i
+    for i in start.children:
+        newEval = minimax(i, depth - 1, -100, 100, evaluate)
+
+        index = i.board.previousMove.board * 9 + i.board.previousMove.piece
+
+        movesMem[index] = newEval
+
+        # Get best eval
+        if newEval > bestEval:
+            bestEval = newEval
+            bestMove = i
+
+
+        # Keep track of forced positions
+        if newEval > 1 and i.infDepth < shortestWinDepth:
+            shortestWinDepth = i.infDepth
+            winNode = i
+
+        elif newEval < -1 and bestEval < -1 and i.infDepth > longestLoseDepth:
+            longestLoseDepth = i.infDepth
+            loseNode = i
+
+    # Return forced positions if necessary
+    if bestEval > 1:
+        moves *= 0
+        index = winNode.board.previousMove.board * 9 + winNode.board.previousMove.piece
+        moves[index] = 1
+
+    elif bestEval < -1:
+        moves *= 0
+        index = loseNode.board.previousMove.board * 9 + loseNode.board.previousMove.piece
+        moves[index] = 1
+
+    else:
+        # Convert everything to percent
+
+        if temp == 0:
+            bestAs = np.array(np.argwhere(moves == np.max(moves))).flatten()
+            bestA = np.random.choice(bestAs)
+            probs = np.zeros(len(moves))
+            probs[bestA] = 1
+            return probs
+
+        # Make all evaluations non-negative
+        minimum = np.minimum(moves)
+        if minimum < 0:
+            moves += minimum
+
+        total = np.sum(moves)
+
+        moves /= total
+
+    return moves
+
 
 cdef class PyNode:
     cdef Node c_node

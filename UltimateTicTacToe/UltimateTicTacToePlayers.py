@@ -60,7 +60,7 @@ class NNetPlayer:
         self.nnet_actor = nnet_actor
         self.weights = weights
 
-        self.mcts = MCTS(None, game, nnet_actor, args, False)
+        self.mcts = MCTS(game, nnet_actor, args, False)
 
     def get_move(self, board):
         ray.get(self.nnet_actor.set_weights.remote(self.weights))

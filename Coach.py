@@ -232,22 +232,10 @@ class ExecuteEpisodeActor:
         curPlayer = 1
         episodeStep = 0
 
-        mcts = MCTS(
-            self,
-            self.game,
-            None,
-            self.args,
-            self.interpreter,
-        )
+        mcts = MCTS(self.game, None, self.args, self.interpreter)
 
         if self.arena:
-            mcts2 = MCTS(
-                self,
-                self.game,
-                None,
-                self.args,
-                self.interpreter2,
-            )
+            mcts2 = MCTS(self.game, None, self.args, self.interpreter2)
 
         while True:
             episodeStep += 1

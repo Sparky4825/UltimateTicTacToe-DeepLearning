@@ -7,6 +7,9 @@ cdef extern from "src/GameState.cpp":
     pass
 
 cdef extern from "include/GameState.h":
+    cdef struct boardCoords:
+        char board, piece
+
     cdef cppclass GameState:
         GameState() except +
         void move(int, int)
@@ -24,10 +27,9 @@ cdef extern from "include/GameState.h":
 
         vector[int] getCanonicalBoard()
 
+        boardCoords previousMove
 
 
-    cdef struct boardCoords:
-        char board, piece
 
 
 cdef extern from "include/Minimax.h":

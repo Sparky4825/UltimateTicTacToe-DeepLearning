@@ -18,16 +18,7 @@ class MCTS:
     This class handles the MCTS tree.
     """
 
-    def __init__(
-        self,
-        episode_actor,
-        game,
-        nnet,
-        args,
-        tflite,
-        use_async=True,
-    ):
-        self.episode_actor = episode_actor
+    def __init__(self, game, nnet, args, tflite, use_async=True):
         self.game = game
         self.nnet = nnet  # Reference to ray actor responsible for NN
         self.tflite = tflite
@@ -116,18 +107,12 @@ class MCTS:
         if s not in self.Ps:
             # leaf node
             # Wait until the prediction is made, allowing other trees to be searched in the meantime
-            if self.use_async and self.episode_actor is not None:
-                # self.Ps[s], v = await self.episode_actor.request_prediction(
-                #     canonicalBoard
-                # )
-                t1 = time.time()
-                self.Ps[s], v = self.tflite.predict(canonicalBoard)
-                t2 = time.time()
 
-                log.debug(f"Prediction made in {t2 - t1} seconds")
+            t1 = time.time()
+            self.Ps[s], v = self.tflite.predict(canonicalBoard)
+            t2 = time.time()
 
-            else:
-                self.Ps[s], v = ray.get(self.nnet.predict.remote(canonicalBoard))
+            log.debug(f"Prediction made in {t2 - t1} seconds")
 
             valids = self.game.getValidMoves(canonicalBoard, 1)
             if useNNPolicy:

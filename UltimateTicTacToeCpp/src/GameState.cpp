@@ -654,6 +654,92 @@ using namespace std;
 
     }
 
+    vector<int> GameState::getBoardBitset() {
+        /**
+         * Gets a representation of the board as a single
+         * bitset object.
+         * 
+         * The board is stored in the form 9 boards of 22 bits.
+         * 
+         * Bits 0-17 store the state of each of the 9 spots. If 
+         * the first bit is set, player 1 has this 
+         * spot, if the second bit is set, the player 2 has the
+         * spot.
+         * 
+         * Bit 18 is set if player 1 has won the board
+         * Bit 19 is set if player 2 has won the board
+         * Bit 20 is set if the board is tied
+         * 
+         * Bit 21 is set if the player is allowed to move on the
+         * board
+         * 
+         * Bit 198 of the bitset is set if player 1 (X) is to
+         * move and unset if player 2 (O) is to move
+         */
+
+        bitset<199> result;
+
+        int toMove = getToMove();
+        int requiredBoard = getRequiredBoard();
+
+        for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                int spotStatus = getPosition(miniboardIndex, spotIndex);
+                
+
+                if (spotStatus == 1) {
+                    result[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
+
+                // If the spot belongs to the other player
+                else if (spotStatus == 2) {
+                    result[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+
+                // Else neither owns it, zero is default
+
+            }
+
+            int boardStatus = getBoardStatus(miniboardIndex);
+
+            // Mark if the board is won/lost/tied
+            if (boardStatus == 1) {
+                result[miniboardIndex * 22 + 18] = 1;
+            }
+
+            else if (boardStatus == 2) {
+                result[miniboardIndex * 22 + 19] = 1;
+            }
+
+            else if (boardStatus == 3) {
+                result[miniboardIndex * 22 + 20] = 1;
+            }
+
+            // Mark if this board is legal to move in
+            // Only legal if unclaimed
+            if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
+                result[miniboardIndex * 22 + 21] = 1;
+            }
+
+
+        }
+
+        // Set the player to move
+        if (toMove == 1) {
+            result[199] = 1;
+        }
+
+        vector<int> fresult;
+
+        for (int i = 0; i < 198; i++) {
+            fresult.push_back(result[i]);
+        }
+
+        return fresult;
+    };
+
     vector<int> GameState::getCanonicalBoard() {
         /**
          * Gets the current board in the Canonical form for
@@ -673,9 +759,12 @@ using namespace std;
          * Bit 21 is set if the player is allowed to move on the
          * board
          * 
+         * Bit 199 is unused; it is leftover from saving toMove
+         * on a full board.
+         * 
          * Board is then converted to a vector<int> for output
          */
-        bitset<198> canonical;
+        bitset<199> canonical;
 
         int toMove = getToMove();
         int requiredBoard = getRequiredBoard();
@@ -716,7 +805,7 @@ using namespace std;
             }
 
             // Mark if this board is legal to move in
-            if (requiredBoard == miniboardIndex || requiredBoard == -1) {
+            if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
                 canonical[miniboardIndex * 22 + 21] = 1;
             }
 
@@ -724,9 +813,30 @@ using namespace std;
 
         vector<int> result;
 
-        for (int i = 0; i < 198; i++) {
+        for (int i = 0; i < 199; i++) {
             result.push_back(canonical[i]);
         }
 
         return result;
     }
+
+GameState boardVector2GameState(vector<int> board) {
+    GameState result;
+    for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+        for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+            if (board[miniboardIndex * 22 + spotIndex * 2] == 1) {
+                result.setPosition(miniboardIndex, spotIndex, 1);
+
+            } else if (board[miniboardIndex * 22 + spotIndex * 2 + 1] == 1) {
+                result.setPosition(miniboardIndex, spotIndex, 2);
+
+            }
+        }
+
+    }
+
+    result.updateMiniboardStatus();
+
+    return result;    
+}

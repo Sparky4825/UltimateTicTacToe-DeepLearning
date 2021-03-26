@@ -36,6 +36,7 @@ int checkMiniboardResults(bitset<20> miniboard);
 
 int getMiniboardResults(bitset<20> miniboard);
 
+
 class GameState {
     private:
         /**
@@ -84,4 +85,8 @@ class GameState {
     void displayGame();
 
     vector<int> getCanonicalBoard();
+    vector<int> getBoardBitset();
+    
 };
+
+GameState boardVector2GameState(vector<int> board);

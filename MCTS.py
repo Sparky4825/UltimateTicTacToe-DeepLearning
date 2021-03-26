@@ -18,9 +18,8 @@ class MCTS:
     This class handles the MCTS tree.
     """
 
-    def __init__(self, game, nnet, args, tflite, use_async=True):
+    def __init__(self, game, args, tflite):
         self.game = game
-        self.nnet = nnet  # Reference to ray actor responsible for NN
         self.tflite = tflite
         self.args = args
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
@@ -30,8 +29,6 @@ class MCTS:
 
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
-
-        self.use_async = use_async
 
         self.log = logging.getLogger(self.__class__.__name__)
 

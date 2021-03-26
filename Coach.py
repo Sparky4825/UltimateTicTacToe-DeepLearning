@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import sys
@@ -206,7 +207,7 @@ class ExecuteEpisodeActor:
     def executeEpisodesFromQueue(self, queue, results):
         while not queue.empty():
             queue.get()
-            results.put(self.executeEpisode(useNNPolicy=False))
+            results.put(self.executeEpisode(useNNPolicy=True))
 
     def executeEpisode(self, useNNPolicy=True):
         """
@@ -232,10 +233,10 @@ class ExecuteEpisodeActor:
         curPlayer = 1
         episodeStep = 0
 
-        mcts = MCTS(self.game, None, self.args, self.interpreter)
+        mcts = MCTS(self.game, self.args, self.interpreter)
 
         if self.arena:
-            mcts2 = MCTS(self.game, None, self.args, self.interpreter2)
+            mcts2 = MCTS(self.game, self.args, self.interpreter2)
 
         while True:
             episodeStep += 1
@@ -300,6 +301,18 @@ class Coach:
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
         self.log = logging.getLogger(self.__class__.__name__)
         coloredlogs.install(level="INFO", logger=self.log)
+
+        fh = logging.FileHandler(
+            f'Training Log - {datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.log'
+        )
+        fh.setLevel("DEBUG")
+        fh.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(name)s[%(process)d] %(levelname)s %(message)s"
+            )
+        )
+
+        self.log.addHandler(fh)
 
     def runEpisodes(
         self, remainingGamesQueue, resultsQueue, arena, numEps, numCPU, *args

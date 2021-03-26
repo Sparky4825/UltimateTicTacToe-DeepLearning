@@ -1,7 +1,5 @@
 from libcpp.vector cimport vector
 
-cdef extern from "src/Minimax.cpp":
-    pass
 
 cdef extern from "src/GameState.cpp":
     pass
@@ -29,24 +27,4 @@ cdef extern from "include/GameState.h":
         vector[int] getBoardBitset()
 
         boardCoords previousMove
-
-    cdef GameState boardVector2GameState(vector[int] board)
-
-
-
-
-cdef extern from "include/Minimax.h":
-    cdef cppclass Node:
-        Node() except +
-        Node(GameState, int) except +
-        int infDepth, depth
-        GameState board
-
-        void addChildren()
-        vector[Node] children
-        vector[int] getCanonicalBoard()
-
-    cdef boardCoords minimaxSearchMove(GameState, int, bool)
-    cdef boardCoords minimaxSearchTimeMove(GameState, int, bool)
-
 

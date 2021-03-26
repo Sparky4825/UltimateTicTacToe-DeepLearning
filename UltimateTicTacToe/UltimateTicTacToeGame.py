@@ -333,7 +333,6 @@ class TicTacToeGame(Game):
         return l
 
     def stringRepresentation(self, board):
-        # TODO: Make stringRepresentation(board) more space and time efficient
         # 8x8 numpy array (canonical board)
         return board.data.tobytes()
 

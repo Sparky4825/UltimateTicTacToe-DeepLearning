@@ -46,6 +46,9 @@ cdef extern from "include/Minimax.h":
         vector[Node] children
         vector[int] getCanonicalBoard()
 
+        int evaluationPerformed, n
+        float w, p
+
     cdef boardCoords minimaxSearchMove(GameState, int, bool)
     cdef boardCoords minimaxSearchTimeMove(GameState, int, bool)
 

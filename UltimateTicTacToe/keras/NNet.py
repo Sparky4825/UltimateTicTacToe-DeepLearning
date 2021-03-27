@@ -81,7 +81,7 @@ class NNetWrapper(NeuralNet):
     def set_weights(self, weights):
         self.nnet.set_weights(weights)
 
-    def train(self, examples):
+    def train(self, examples, epochs=None):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
@@ -89,6 +89,9 @@ class NNetWrapper(NeuralNet):
         tensorboard_callback = tf.keras.callbacks.TensorBoard(
             log_dir=log_dir, histogram_freq=1
         )
+
+        if epochs is None:
+            epochs = self.args.epochs
 
         validate = examples[:1000]
         examples = examples[1000:]
@@ -108,7 +111,7 @@ class NNetWrapper(NeuralNet):
             x=input_boards,
             y=[target_pis, target_vs],
             batch_size=args.batch_size,
-            epochs=args.epochs,
+            epochs=epochs,
             callbacks=[tensorboard_callback],
             validation_data=(validate_boards, [val_pis, val_vs]),
         )

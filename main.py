@@ -23,10 +23,11 @@ coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 args = dotdict(
     {
         "numIters": 20,
-        "numEps": 175,  # Number of complete self-play games to simulate during a new iteration.
+        "numEps": 350,  # Number of complete self-play games to simulate during a new iteration.
         "tempThreshold": 15,  #
+        "arenaTempThreshold": 5,  #
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
-        "maxlenOfQueue": 500000,  # Number of game examples to train the neural networks.
+        "maxlenOfQueue": 300000,  # Number of game examples to train the neural networks.
         "numMCTSSims": 1250,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 40,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 1,
@@ -35,8 +36,8 @@ args = dotdict(
         # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
         "load_model": True,
         "load_folder_file": ("./temp/", "best.pth.tar"),
-        "numItersForTrainExamplesHistory": 2,
-        "numCPUForMCTS": 12,  # The number of Ray actors to use to add boards to be predicted.
+        "numItersForTrainExamplesHistory": 4,
+        "numCPUForMCTS": 10,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 64,
     }
 )
@@ -178,7 +179,7 @@ def main():
         c.loadTrainExamples()
 
     log.info("Starting the learning process")
-    c.learn()
+    c.learnIterations()
 
 
 if __name__ == "__main__":

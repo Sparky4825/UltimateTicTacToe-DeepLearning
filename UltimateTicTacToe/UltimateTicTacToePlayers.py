@@ -3,6 +3,7 @@ import asyncio
 import numpy as np
 import ray
 
+from LiteModel import LiteModel
 from MCTS import MCTS
 
 """
@@ -55,15 +56,17 @@ class HumanTicTacToePlayer:
 
 
 class NNetPlayer:
-    def __init__(self, game, nnet_actor, weights, args):
-        self.game = game
-        self.nnet_actor = nnet_actor
-        self.weights = weights
+    def __init__(self, game, tflite, args):
+        import tensorflow as tf
 
-        self.mcts = MCTS(game, args, False)
+        self.game = game
+        self.tflite = tflite
+
+        self.interpreter = LiteModel(tf.lite.Interpreter(model_content=tflite))
+
+        self.mcts = MCTS(game, args, self.interpreter)
 
     def get_move(self, board):
-        ray.get(self.nnet_actor.set_weights.remote(self.weights))
 
-        results = asyncio.run(self.mcts.getActionProb(board, temp=0))
+        results = self.mcts.getActionProb(board, temp=0)
         return np.argmax(results)

@@ -14,6 +14,8 @@ from UltimateTicTacToe.keras.NNet import NNetWrapper
 from main import args
 from utils import *
 
+import tensorflow as tf
+
 """
 use this script to play any two agents against each other, or play manually with
 any agent.
@@ -41,16 +43,13 @@ hp = HumanTicTacToePlayer(g).play
 #
 # n1.load_checkpoint("tictactoe\\pretrained", "best.pth.tar")
 
-NNactor = NNetWrapper.remote(g)
-ray.get(NNactor.load_checkpoint.remote("./temp/", "best.pth.tar"))
-
-weights = ray.get(NNactor.get_weights.remote())
+modelPath = "litemodels/20210326-092010.tflite"
 
 
-n1p = NNetPlayer(g, NNactor, weights, args)
+with open(modelPath, "rb") as f:
+    modelContent = f.read()
 
-
-ray.get(NNactor.load_checkpoint.remote(".\\temp", "temp.pth.tar"))
+n1p = NNetPlayer(g, modelContent, args)
 
 
 if human_vs_cpu:
@@ -58,7 +57,8 @@ if human_vs_cpu:
 else:
     pass
 
+if __name__ == "__main__":
 
-arena = Arena.Arena(n1p.get_move, player2, g, display=TicTacToeGame.display)
+    arena = Arena.Arena(n1p.get_move, player2, g, display=TicTacToeGame.display)
 
-print(arena.playGames(2, verbose=True))
+    print(arena.playGames(2, verbose=True))

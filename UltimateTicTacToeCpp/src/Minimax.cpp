@@ -232,6 +232,7 @@ significances calcSignificances(bitset<20> fullBoard[9], float evaluationsX[9], 
 Node::Node (GameState currentBoard, int currentDepth){
     board = currentBoard;
     depth = currentDepth;
+
 }
 
 Node::Node() {

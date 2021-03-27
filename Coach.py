@@ -69,117 +69,6 @@ class ExecuteEpisodeActor:
 
         coloredlogs.install(level="INFO", logger=self.log)
 
-    # def run_batch(self):
-    #     self.log.debug("Requesting batch prediction")
-    #     self.prediction_results = self.nnet_actor.predict_batch(
-    #         self.pending_evaluations
-    #     )
-    #
-    #     # Clear out the old boards
-    #     self.pending_evaluations = np.empty((0, 3, 9, 10))
-    #
-    #     # Add the boards need to be claimed
-    #     self.unclaimed_results = np.full(len(self.prediction_results[0]), 1)
-    #
-    #     # Tell the awaiting functions that the batch has been processed and they need to claim results
-    #     self.claim_evaluation.clear()
-    #     self.run_evaluation.set()
-    #
-    #     self.last_prediction_time = time.time()
-    #
-    #     # Flip weights back and forth every time
-    #     if self.arena:
-    #         if self.current_weight_set == 1:
-    #             self.nnet_actor.set_weights(self.player2_weights)
-    #
-    #         else:
-    #             self.nnet_actor.set_weights(self.player1_weights)
-    #
-    #         self.current_weight_set = 2 / self.current_weight_set
-    #
-    # async def prediction_timer(self):
-    #     """
-    #     Checks every second to see if the prediction timer
-    #     has run out and a prediction needs to be run, despite
-    #     not having a full batch
-    #     :return:
-    #     """
-    #
-    #     self.log.info("PREDICTION TIMER STARTED")
-    #
-    #     self.prediction_timer_running = True
-    #
-    #     while self.prediction_timer_running:
-    #         self.log.debug("Checking if prediction is needed")
-    #         if (
-    #             time.time() > self.last_prediction_time + 2
-    #             and len(self.pending_evaluations) > 0
-    #         ):
-    #             self.log.info("Prediction is needed")
-    #             self.run_batch()
-    #
-    #         else:
-    #             self.log.debug(
-    #                 f"Prediction is not needed - Pending evaluations: {self.pending_evaluations}"
-    #             )
-    #             await asyncio.sleep(2)
-    #
-    # async def request_prediction(self, board):
-    #     """
-    #     Adds the given board to be evaluated on the GPU with the next batch.
-    #     Then it awaits for the result.
-    #     :param board:
-    #     :return:
-    #     """
-    #
-    #     self.log.debug(
-    #         f"Requesting prediction {len(self.pending_evaluations)} {self.batch_size}"
-    #     )
-    #
-    #     async with self.sem:
-    #         # Update the timer every time a new prediction is requested
-    #         self.last_prediction_time = time.time()
-    #
-    #         if self.run_evaluation.is_set():
-    #             self.log.debug(
-    #                 "Waiting for another process to claim results to add prediction"
-    #             )
-    #             self.log.debug(f"Unclaimed results: {self.unclaimed_results}")
-    #             await self.claim_evaluation.wait()
-    #
-    #         # Add the board to the list of predictions to be made
-    #         self.pending_evaluations = np.append(
-    #             self.pending_evaluations, board[np.newaxis, :, :], axis=0
-    #         )
-    #
-    #         # Save the board index locally to remember which results go with this board after predictions are calculated
-    #         board_index = len(self.pending_evaluations) - 1
-    #
-    #         # Check if its time to run a batch
-    #         if len(self.pending_evaluations) >= self.batch_size:
-    #             self.run_batch()
-    #
-    #         else:
-    #             # Wait until the predictions have been made
-    #             await self.run_evaluation.wait()
-    #
-    #         # Get and return the results
-    #         self.log.debug(f"Prediction results: {self.prediction_results}")
-    #         pi, v = (
-    #             self.prediction_results[0][board_index],
-    #             self.prediction_results[1][board_index],
-    #         )
-    #         self.unclaimed_results[board_index] = 0
-    #
-    #         # Check if all the results have been claimed
-    #         if not np.any(self.unclaimed_results):
-    #
-    #             # If they have, allow the next set of boards to be setup
-    #             self.claim_evaluation.set()
-    #             self.run_evaluation.clear()
-    #
-    #         return pi, v
-
     def executeMultipleEpisodes(self, num_episodes):
         """
         Will start multiple executeEpisodes at once, concurrently.
@@ -245,7 +134,7 @@ class ExecuteEpisodeActor:
             if not self.arena:
                 temp = int(episodeStep < self.args.tempThreshold)
             else:
-                temp = 0
+                temp = int(episodeStep < self.args.arenaTempThreshold)
 
             # Use the correct tree
             if not self.arena or curPlayer == 1:
@@ -342,7 +231,126 @@ class Coach:
 
         return results
 
-    def learn(self):
+    def learnContinuous(self):
+        """
+        Continuously plays games against itself and learns after every game.
+        """
+
+        self.log.info("Starting continuous learning ...")
+
+        self.log.info("Loading previous examples")
+        self.loadExamplesIteration(4)
+
+        gamesLoaded = sum(len(c) for c in self.trainExamplesHistory)
+
+        if gamesLoaded >= self.args.maxlenOfQueue:
+            self.log.info(
+                f"{gamesLoaded} previous examples loaded, skipping pre-training games"
+            )
+        else:
+            self.log.info(
+                f"{gamesLoaded} previous examples loaded, pre-training games are needed"
+            )
+
+            self.log.info("Starting pre-training games")
+
+            self.log.info("Creating TF-Lite model")
+            tflite_model = self.nnet.convert_to_tflite()
+            self.log.info("TF-Lite model done")
+
+            with open(
+                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
+                "wb",
+            ) as f:
+                f.write(tflite_model)
+
+            # Have enough games to start training with
+            gamesQueue = Queue()
+            resultsQueue = Queue()
+
+            iterationTrainExamples = self.runEpisodes(
+                gamesQueue,
+                resultsQueue,
+                False,
+                self.args.numEps,
+                self.args.numCPUForMCTS,
+                self.game,
+                self.args,
+                tflite_model,
+            )
+
+            self.trainExamplesHistory.append(iterationTrainExamples)
+
+            self.log.info("Pre-training games complete")
+
+        gamesCount = 0
+        while True:
+
+            self.log.info("Creating TF-Lite model")
+            tflite_model = self.nnet.convert_to_tflite()
+            self.log.info("TF-Lite model done")
+
+            with open(
+                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
+                "wb",
+            ) as f:
+                f.write(tflite_model)
+
+            gamesCount += 1
+            self.log.info(f"Start training game-set #{gamesCount}")
+
+            gamesQueue = Queue()
+            resultsQueue = Queue()
+
+            iterationTrainExamples = self.runEpisodes(
+                gamesQueue,
+                resultsQueue,
+                False,
+                self.args.numCPUForMCTS,  # Run one game per CPU being used
+                self.args.numCPUForMCTS,
+                self.game,
+                self.args,
+                tflite_model,
+            )
+
+            self.log.info(
+                f"Game-set complete with {len(iterationTrainExamples)} new positions"
+            )
+
+            self.log.info("Begin pre-fitting processing")
+
+            # TODO: Remove duplicate positions and average their results
+
+            self.trainExamplesHistory.append(iterationTrainExamples)
+            del iterationTrainExamples
+
+            trainExamples = []
+            index = len(self.trainExamplesHistory)
+            while len(trainExamples) < self.args.maxlenOfQueue and index > 0:
+                index -= 1
+
+                trainExamples.extend(self.trainExamplesHistory[index])
+
+            # Remove positions that are too old to be useful
+            self.trainExamplesHistory = self.trainExamplesHistory[index:]
+
+            # Save examples for later use
+            self.saveTrainExamples(gamesCount)
+
+            shuffle(trainExamples)
+
+            self.log.info("Pre-fitting processing done")
+
+            self.log.info("Begin fitting")
+            self.nnet.train(trainExamples, epochs=2)
+            self.log.info("Fitting complete")
+
+            self.nnet.save_checkpoint(
+                folder=self.args.checkpoint,
+                filename=f"{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.pth.tar",
+            )
+
+    def learnIterations(self):
         """
         Performs numIters iterations with numEps episodes of self-play in each
         iteration. After every iteration, it retrains neural network with
@@ -351,15 +359,19 @@ class Coach:
         only if it wins >= updateThreshold fraction of games.
         """
 
-        # TODO: POTENTIAL BUG IN TRAINING EXAMPLES BEING PASSED TO THE MODEL, THE LAYER THAT SHOWS ALLOWED MOVES IS NOT WORKING CORRECTLY; INVESTIGATE
-
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
-            log.info(f"Starting Iter #{i} ...")
+            self.log.info(f"Starting Iter #{i} ...")
 
             self.log.info("Creating TF-Lite model")
             tflite_model = self.nnet.convert_to_tflite()
             self.log.info("TF-Lite model done")
+
+            with open(
+                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
+                "wb",
+            ) as f:
+                f.write(tflite_model)
 
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
@@ -535,6 +547,29 @@ class Coach:
             self.args.load_folder_file[0], self.args.load_folder_file[1]
         )
         examplesFile = modelFile + ".examples"
+        if not os.path.isfile(examplesFile):
+            log.warning(f'File "{examplesFile}" with trainExamples not found!')
+            # r = input("Continue? [y|n]")
+            r = "y"
+            if r != "y":
+                sys.exit()
+        else:
+            log.info("File with trainExamples found. Loading it...")
+            with open(examplesFile, "rb") as f:
+                self.trainExamplesHistory = Unpickler(f).load()
+            log.info("Loading done!")
+
+            # examples based on the model were already collected (loaded)
+            self.skipFirstSelfPlay = True
+
+    def loadExamplesIteration(self, iteration):
+        folder = self.args.checkpoint
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        examplesFile = os.path.join(
+            folder, self.getCheckpointFile(iteration) + ".examples"
+        )
+
         if not os.path.isfile(examplesFile):
             log.warning(f'File "{examplesFile}" with trainExamples not found!')
             # r = input("Continue? [y|n]")

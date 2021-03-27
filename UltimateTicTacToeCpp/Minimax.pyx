@@ -36,6 +36,8 @@ cdef class UTicTacToeGame():
         else:
             bmem[board_index * 22 + piece_index * 2 + 1] = 1
 
+        cdef int board_result = check_miniboard
+
 
 cdef float minimax(Node& node, int depth, float alpha, float beta, evaluate):
     cdef float bestEval, newEval

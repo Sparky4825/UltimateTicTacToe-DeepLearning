@@ -77,8 +77,11 @@ class Node{
 
         float getEval();
 
-        
-
+        int evaluationPerformed = 0;
+        float w, p;
+        // N is the number of times the board was visited in a simulation
+        // Na is the number of times the board was taken as an action
+        int n;
 };
 
 struct nodeAndEval {

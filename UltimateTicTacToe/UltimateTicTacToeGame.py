@@ -177,6 +177,7 @@ class TicTacToeGame(Game):
         b = np.copy(board)
         board_index = int(action / 9)
         piece_index = action % 9
+
         assert board[0][board_index][piece_index] == 0
         assert board[1][board_index][piece_index] == 0
 

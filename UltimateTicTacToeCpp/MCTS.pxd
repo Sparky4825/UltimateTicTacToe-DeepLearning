@@ -10,7 +10,7 @@ cdef extern from "limits.h":
 
 cdef extern from "include/GameState.h":
     cdef struct boardCoords:
-        char board, piece
+        int board, piece
 
     cdef cppclass GameState:
         GameState() except +
@@ -32,4 +32,3 @@ cdef extern from "include/GameState.h":
         vector[int] getBoardBitset()
 
         boardCoords previousMove
-

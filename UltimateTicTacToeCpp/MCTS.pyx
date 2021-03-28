@@ -57,6 +57,9 @@ cdef class MCTS:
     cdef float cpuct
     cdef int numMCTSSims 
     cdef object evaluate, log
+    cdef Node rootNode
+    cdef Node *currentNode
+    cdef boolean evaluationNeeded
 
     def __cinit__(self, args, evaluate):
         self.evaluate = evaluate
@@ -67,8 +70,10 @@ cdef class MCTS:
         self.log = logging.getLogger(self.__class__.__name__)
 
         coloredlogs.install(level="INFO", logger=self.log)
+        self.evaluationNeeded = False
 
-
+    def startNewSearch(self, PyGameState position):
+        self.rootNode = Node(position.c_gamestate, 0)
 
     def getActionProb(self, PyGameState position, int temp=1):
         """
@@ -84,10 +89,14 @@ cdef class MCTS:
         cdef vector[int] maxCountAction
         cdef int totalCount
 
+        print("HERE")
 
         # Run the simulations
         for i in range(self.numMCTSSims):
             self.search(start)
+
+        print("done searchign")
+
 
         # Get the counts of every child
         for child in start.children:
@@ -98,6 +107,7 @@ cdef class MCTS:
                 if child.n > maxCount:
                     # New best move found, remove all others
                     maxCountAction.clear()
+                    maxCountAction.push_back(action)
                     maxCount = child.n
 
                 elif child.n == maxCount:
@@ -108,6 +118,7 @@ cdef class MCTS:
                 counts[action] = child.n
                 totalCount += child.n
 
+        return list(counts)
 
         # Select only the best move (at random if multiple best moves)
         if temp == 0:
@@ -134,7 +145,7 @@ cdef class MCTS:
 
             currentNode = deref(currentNode).parent
 
-    cdef Node *searchPreNN(self, Node *startNode) except *:
+    def searchPreNN(self):
         """
         Performs the first half of a MCTS simulation.
         
@@ -142,8 +153,9 @@ cdef class MCTS:
         a null pointer if a NN evaluation is not needed (ie terminal node is reached).
         """
         # Select a node
-        cdef Node *currentNode = startNode
+        cdef Node *currentNode = &self.rootNode
         cdef Node *bestAction
+        cdef Node *child
 
         deref(currentNode).addChildren()
 
@@ -151,22 +163,27 @@ cdef class MCTS:
 
         cdef float u, q, v
 
-        cdef int status
+        cdef int status, i
+
+        cdef vector[int] empty
 
         # Search until an unexplored node is found
         while deref(currentNode).hasChildren:
+            deref(currentNode).n += 1
 
             # Pick the action with the highest upper confidence bound
-            for child in deref(currentNode).children:
-                if child.n > 0:
-                    u = (child.w / child.n) + self.cpuct * child.p * ( sqrt(deref(currentNode).n) / (1 + child.n)  )
+            bestUCB = -1 * FLT_MAX
+            for i in range(deref(currentNode).children.size()):
+                child = &deref(currentNode).children[i]
+                if deref(child).n > 0:
+                    u = (deref(child).w / deref(child).n) + self.cpuct * deref(child).p * ( sqrt(deref(currentNode).n) / (1 + deref(child).n)  )
                 else:
                     # Always expore an unexplored node
                     u = FLT_MAX
 
                 if u > bestUCB:
                     bestUCB = u
-                    bestAction = &child
+                    bestAction = child
 
             currentNode = bestAction
 
@@ -176,54 +193,62 @@ cdef class MCTS:
             # Check if the game is over
             if status == 1:
                 self.backpropagate(currentNode, 1)
-                return NULL
+                self.evaluationNeeded = False
+                return empty
 
             elif status == 2:
                 self.backpropagate(currentNode, -1)
-                return NULL
+                self.evaluationNeeded = False
+                return empty
 
             # Draw has very little value
             elif status == 3:
                 self.backpropagate(currentNode, -0.00001)
-                return NULL
+                self.evaluationNeeded = False
+                return empty
 
 
         # A neural network evaluation is needed
         deref(currentNode).addChildren()
-        return currentNode
 
-    cdef void searchPostNN(self, Node *currentNode, vector[int] policy, float v) except *:
-        cdef int validAction, index
+        self.evaluationNeeded = True
+        self.currentNode = currentNode
+        return deref(currentNode).board.getCanonicalBoard()
+
+    def searchPostNN(self, policy, float v):
+        cdef int validAction, index, i
         cdef float totalValidMoves = 0
         cdef int numValidMoves = 0
+        cdef Node *child
 
         # Save policy value
-
         # Normalize policy values based on which moves are valid
-        for child in deref(currentNode).children:
-            validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
+        for i in range(deref(self.currentNode).children.size()):
+            child = &deref(self.currentNode).children[i]
+
+            validAction = deref(child).board.previousMove.board * 9 + deref(child).board.previousMove.piece
+            
             totalValidMoves += policy[validAction]
             numValidMoves += 1
 
         if totalValidMoves > 0:
             # Renormalize the values of all valid moves            
-            index = -1
-            for child in deref(currentNode).children:
-                index += 1
-                validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
-                deref(currentNode).children[index].p = policy[validAction] / totalValidMoves
+
+            for i in range(deref(self.currentNode).children.size()):
+                child = &deref(self.currentNode).children[i]
+                validAction = deref(child).board.previousMove.board * 9 + deref(child).board.previousMove.piece
+                deref(child).p = policy[validAction] / totalValidMoves
         else:
             # All valid moves masked, doing a workaround
             self.log.warning("All valid moves masked, doing a workaround")
 
-            index = -1
             # Be careful, for loops create copies, not references
-            for child in deref(currentNode).children:
-                index += 1
-                validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
-                deref(currentNode).children[index].p = 1 / numValidMoves
+            for i in range(deref(self.currentNode).children.size()):
+                child = &deref(self.currentNode).children[i]
+                validAction = deref(child).board.previousMove.board * 9 + deref(child).board.previousMove.piece
+                deref(child).p = 1 / numValidMoves
 
-        self.backpropagate(currentNode, v)
+        self.backpropagate(self.currentNode, v)
 
 
     cdef float search(self, Node &node) except *:
@@ -237,7 +262,12 @@ cdef class MCTS:
         cdef vector[float] policy
         cdef int index
 
+        print("ENTERING A SEaRCH")
+        print(node.n)
+        print(node.depth)
         node.n += 1
+
+        print("n adjusted A SEaRCH")
 
         if currentPlayer == 2:
             currentPlayer = -1
@@ -318,5 +348,62 @@ cdef class MCTS:
         deref(bestAction).w += v
 
         return -1 * v
-
         
+def prepareBatch(trees):
+    """
+    Takes a python list of MCTS objects and returns a numpy array that needs to be 
+    evaluated by the NN.
+    """
+
+    boards = np.zeros((len(trees), 199), dtype="int")
+
+    cdef int [:, :] boardsView = boards
+
+    cdef Node *evalNode 
+    cdef int i
+    cdef vector[int] canBoard
+
+    # Loop by reference
+    for i in range(len(trees)):
+        canBoard = trees[i].searchPreNN()
+
+        for j in range(canBoard.size()):
+            boardsView[i][j] = canBoard[j]
+
+    return boards
+
+
+def batchResults(trees, evaluations):
+    """
+    Takes a python list of MCTS objects and the numpy array of results and puts all
+    of the results into the tree objects that need them.
+    """
+    cdef int index = 0
+    cdef MCTS t
+
+
+    for t in trees:
+        if t.evaluationNeeded:
+            t.searchPostNN(evaluations[0][index], evaluations[1][index])
+            index += 1
+
+
+cdef testByReference(Node *n, int depth):
+    cdef Node *startNode = n
+
+    deref(startNode).addChildren()
+
+    cdef int i 
+
+    if depth == 0:
+        for child in deref(startNode).children:
+            child.board.displayGame()
+
+    else:
+        for i in range(deref(startNode).children.size()):
+            testByReference(&deref(startNode).children[i], depth - 1)
+
+def basicTest(PyGameState position, int depth):
+    cdef Node start = Node(position.c_gamestate, 0)
+
+    testByReference(&start, depth)

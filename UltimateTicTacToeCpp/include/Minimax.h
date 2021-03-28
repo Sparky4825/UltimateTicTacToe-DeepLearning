@@ -71,7 +71,7 @@ class Node{
         GameState board;
 
         int infDepth = -1;
-        int depth;
+        int depth = 0;
         bool pruned = false;
 
         vector<Node> children;
@@ -83,10 +83,11 @@ class Node{
         float getEval();
 
         int evaluationPerformed = 0;
-        float w, p;
+        float w = 0;
+        float p = 0;
         // N is the number of times the board was visited in a simulation
         // Na is the number of times the board was taken as an action
-        int n;
+        int n = 0;
 };
 
 struct nodeAndEval {

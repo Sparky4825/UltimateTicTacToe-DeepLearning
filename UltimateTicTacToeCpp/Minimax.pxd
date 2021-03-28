@@ -29,6 +29,8 @@ cdef extern from "include/GameState.h":
         vector[int] getCanonicalBoard()
         vector[int] getBoardBitset()
 
+        void displayGame()
+
         boardCoords previousMove
 
     cdef GameState boardVector2GameState(vector[int] board)
@@ -46,7 +48,6 @@ cdef extern from "include/Minimax.h":
         void addChildren()
         vector[Node] children
         Node *parent
-        vector[int] getCanonicalBoard()
 
         int evaluationPerformed, n
         float w, p

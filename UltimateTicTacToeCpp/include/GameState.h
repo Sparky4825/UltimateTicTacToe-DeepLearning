@@ -28,7 +28,7 @@ const bitset<20> winningPosO[] = {
 };
 
 struct boardCoords {
-    char board, piece;
+    int board, piece;
 };
 
 int checkMiniboardResultsWithTie(bitset<20> miniboard);

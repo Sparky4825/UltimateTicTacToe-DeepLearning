@@ -7,37 +7,6 @@ cimport numpy as np
 
 from libcpp.vector cimport vector
 
-cdef class UTicTacToeGame():
-    def __cinit__(self):
-        self.n = 9
-
-    def getInitBoard(self):
-        cdef GameState initial
-
-        return np.ndarray(initial.getBoardBitset(), dtype=np.uint8)
-
-    def getBoardSize(self):
-        return (199)
-
-    def getActionSize(self):
-        return 81
-
-    def getNextState(self, np.ndarray board, int player, int action):
-        cdef int board_index, piece_index
-        board_index = int(action / 9)
-        piece_index = action % 9
-
-        cdef np.ndarray b = np.copy(board, dtype=np.uint8)
-
-        cdef int[:] bmem = b
-
-        if player == 1:
-            bmem[board_index * 22 + piece_index * 2] = 1
-        else:
-            bmem[board_index * 22 + piece_index * 2 + 1] = 1
-
-        cdef int board_result = check_miniboard
-
 
 cdef float minimax(Node& node, int depth, float alpha, float beta, evaluate):
     cdef float bestEval, newEval

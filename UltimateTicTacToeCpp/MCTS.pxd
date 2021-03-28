@@ -1,7 +1,11 @@
 from libcpp.vector cimport vector
 from libcpp cimport bool as boolean
+from Minimax cimport Node
 
 cdef extern from "src/GameState.cpp":
+    pass
+
+cdef extern from "src/MonteCarlo.cpp":
     pass
 
 cdef extern from "limits.h":
@@ -32,3 +36,17 @@ cdef extern from "include/GameState.h":
         vector[int] getBoardBitset()
 
         boardCoords previousMove
+
+cdef extern from "include/MonteCarlo.h":
+    cdef cppclass MCTS:
+        MCTS()
+        MCTS(float _cpuct)
+
+        void startNewSearch(GameState position)
+        void backpropagate(Node *finalNode, float result)
+
+        vector[int] searchPreNN()
+
+        void searchPostNN(vector[float] policy, float v)
+
+        boolean evaluationNeeded

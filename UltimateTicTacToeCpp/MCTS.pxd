@@ -1,5 +1,5 @@
 from libcpp.vector cimport vector
-
+from libcpp cimport bool as boolean
 
 cdef extern from "src/GameState.cpp":
     pass
@@ -26,6 +26,7 @@ cdef extern from "include/GameState.h":
         int getPosition(int, int)
 
         int isValidMove(int, int)
+
 
         vector[int] getCanonicalBoard()
         vector[int] getBoardBitset()

@@ -232,11 +232,19 @@ significances calcSignificances(bitset<20> fullBoard[9], float evaluationsX[9], 
 Node::Node (GameState currentBoard, int currentDepth){
     board = currentBoard;
     depth = currentDepth;
+    parent = nullptr;
 
 }
 
-Node::Node() {
+Node::Node (GameState currentBoard, int currentDepth, Node *nodeParent) {
+    board = currentBoard;
+    depth = currentDepth;
+    parent = nodeParent;
+}
 
+Node::Node() {
+    parent = nullptr;
+    depth = 0;
 };
 
 void Node::addChildren() {
@@ -245,7 +253,7 @@ void Node::addChildren() {
      */
     if (!hasChildren) {
         for (GameState i : board.allPossibleMoves()) {
-            children.push_back(Node(i, depth + 1));
+            children.push_back(Node(i, depth + 1, this));
         }
         hasChildren = true;
     }

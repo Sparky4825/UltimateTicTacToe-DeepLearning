@@ -1,4 +1,5 @@
 from libcpp.vector cimport vector
+from libcpp cimport bool as boolean
 
 cdef extern from "src/Minimax.cpp":
     pass
@@ -44,10 +45,14 @@ cdef extern from "include/Minimax.h":
 
         void addChildren()
         vector[Node] children
+        Node *parent
         vector[int] getCanonicalBoard()
 
         int evaluationPerformed, n
         float w, p
+
+        boolean hasChildren
+
 
     cdef boardCoords minimaxSearchMove(GameState, int, bool)
     cdef boardCoords minimaxSearchTimeMove(GameState, int, bool)

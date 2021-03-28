@@ -60,11 +60,13 @@ const int wonSig = 10, lostSig = 0, tieSig = 0;
 class Node{
     private:
         float eval;
-        bool hasChildren = false;
 
 
     public:
+        bool hasChildren = false;
+
         Node(GameState currentBoard, int currentDepth);
+        Node(GameState currentBoard, int currentDepth, Node *currentParent);
         Node();
         GameState board;
 
@@ -73,7 +75,10 @@ class Node{
         bool pruned = false;
 
         vector<Node> children;
+        Node *parent;
         void addChildren();
+
+        
 
         float getEval();
 

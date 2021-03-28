@@ -4,7 +4,7 @@ from Minimax cimport Node
 
 cimport numpy as np
 
-from cython.operator cimport dereference
+from cython.operator cimport dereference as deref
 
 from libcpp.vector cimport vector
 from libcpp.unordered_map cimport unordered_map
@@ -121,6 +121,110 @@ cdef class MCTS:
 
         return list(counts)
 
+    cdef void backpropagate(self, Node *finalNode, float result) except *:
+        cdef Node *currentNode = deref(finalNode).parent
+
+        while deref(currentNode).parent is not NULL:
+            currentNode.n += 1
+
+            if deref(currentNode).board.getToMove() == 1:
+                deref(currentNode).w += result
+            else:
+                deref(currentNode).w += result * -1
+
+            currentNode = deref(currentNode).parent
+
+    cdef Node *searchPreNN(self, Node *startNode) except *:
+        """
+        Performs the first half of a MCTS simulation.
+        
+        Returns the pointer to a node to evaluate if a NN evaluation is needed. Returns
+        a null pointer if a NN evaluation is not needed (ie terminal node is reached).
+        """
+        # Select a node
+        cdef Node *currentNode = startNode
+        cdef Node *bestAction
+
+        deref(currentNode).addChildren()
+
+        cdef float bestUCB = -1 * FLT_MAX
+
+        cdef float u, q, v
+
+        cdef int status
+
+        # Search until an unexplored node is found
+        while deref(currentNode).hasChildren:
+
+            # Pick the action with the highest upper confidence bound
+            for child in deref(currentNode).children:
+                if child.n > 0:
+                    u = (child.w / child.n) + self.cpuct * child.p * ( sqrt(deref(currentNode).n) / (1 + child.n)  )
+                else:
+                    # Always expore an unexplored node
+                    u = FLT_MAX
+
+                if u > bestUCB:
+                    bestUCB = u
+                    bestAction = &child
+
+            currentNode = bestAction
+
+            status = deref(currentNode).board.getStatus()
+            # If the game is over, backpropagate results, NN eval is not needed
+
+            # Check if the game is over
+            if status == 1:
+                self.backpropagate(currentNode, 1)
+                return NULL
+
+            elif status == 2:
+                self.backpropagate(currentNode, -1)
+                return NULL
+
+            # Draw has very little value
+            elif status == 3:
+                self.backpropagate(currentNode, -0.00001)
+                return NULL
+
+
+        # A neural network evaluation is needed
+        deref(currentNode).addChildren()
+        return currentNode
+
+    cdef void searchPostNN(self, Node *currentNode, vector[int] policy, float v) except *:
+        cdef int validAction, index
+        cdef float totalValidMoves = 0
+        cdef int numValidMoves = 0
+
+        # Save policy value
+
+        # Normalize policy values based on which moves are valid
+        for child in deref(currentNode).children:
+            validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
+            totalValidMoves += policy[validAction]
+            numValidMoves += 1
+
+        if totalValidMoves > 0:
+            # Renormalize the values of all valid moves            
+            index = -1
+            for child in deref(currentNode).children:
+                index += 1
+                validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
+                deref(currentNode).children[index].p = policy[validAction] / totalValidMoves
+        else:
+            # All valid moves masked, doing a workaround
+            self.log.warning("All valid moves masked, doing a workaround")
+
+            index = -1
+            # Be careful, for loops create copies, not references
+            for child in deref(currentNode).children:
+                index += 1
+                validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
+                deref(currentNode).children[index].p = 1 / numValidMoves
+
+        self.backpropagate(currentNode, v)
+
 
     cdef float search(self, Node &node) except *:
 
@@ -131,6 +235,7 @@ cdef class MCTS:
         cdef float totalValidMoves = 0
         cdef int numValidMoves = 0
         cdef vector[float] policy
+        cdef int index
 
         node.n += 1
 
@@ -167,16 +272,21 @@ cdef class MCTS:
 
             if totalValidMoves > 0:
                 # Renormalize the values of all valid moves            
+                index = -1
                 for child in node.children:
+                    index += 1
                     validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
-                    child.p = policy[validAction] / totalValidMoves
+                    node.children[index].p = policy[validAction] / totalValidMoves
             else:
                 # All valid moves masked, doing a workaround
                 self.log.warning("All valid moves masked, doing a workaround")
 
+                index = -1
+                # Be careful, for loops create copies, not references
                 for child in node.children:
+                    index += 1
                     validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece
-                    child.p = 1 / numValidMoves
+                    node.children[index].p = 1 / numValidMoves
 
             node.evaluationPerformed = 1
 
@@ -194,17 +304,18 @@ cdef class MCTS:
             if child.n > 0:
                 u = (child.w / child.n) + self.cpuct * child.p * ( sqrt(node.n) / (1 + child.n)  )
             else:
-                # Q = 0 if child node has not been expored yet?
-                u = self.cpuct * child.p * ( sqrt(node.n) / (1 + child.n)  )
+                # Always expore an unexplored node
+                bestUCB = FLT_MAX
+                u = FLT_MAX
 
             if u > bestUCB:
                 bestUCB = u
                 bestAction = &child
 
         # Start a recursive search on the best action
-        v = self.search(dereference(bestAction))
+        v = self.search(deref(bestAction))
 
-        dereference(bestAction).w += v
+        deref(bestAction).w += v
 
         return -1 * v
 

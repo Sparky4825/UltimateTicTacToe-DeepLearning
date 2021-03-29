@@ -34,9 +34,7 @@ def get_model(game, args):
     args = args
 
     # Neural Net
-    input_boards = Input(
-        shape=(board_x, board_y, board_z)
-    )  # s: batch_size x board_x x board_y
+    input_boards = Input(shape=199)  # s: batch_size x board_x x board_y
 
     # First pass though 2 layers with only one node per spot (plus 1 for won boards)
 

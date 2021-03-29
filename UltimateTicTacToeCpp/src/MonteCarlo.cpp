@@ -134,7 +134,6 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
 
 vector<float> MCTS::getActionProb() {
     vector<float> result;
-    float resultSum;
 
     float totalActionValue = 0;
     int numValidActions = 0;
@@ -155,7 +154,6 @@ vector<float> MCTS::getActionProb() {
         float actionValue = action.n / totalActionValue;
         int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
         result[actionIndex] = actionValue;
-        resultSum += actionValue;
 
         if (actionValue > maxActionValue) {
             maxActionValue = actionValue;

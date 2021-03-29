@@ -107,8 +107,9 @@ def prepareBatch(trees):
         pymcts = trees[i]
         canBoard = pymcts.mcts.searchPreNN()
 
-        for j in range(canBoard.size()):
-            boardsView[i][j] = canBoard[j]
+        if pymcts.evaluationNeeded:
+            for j in range(canBoard.size()):
+                boardsView[i][j] = canBoard[j]
 
     return boards
 
@@ -125,7 +126,7 @@ def batchResults(trees, pi, v):
     for t in trees:
         if t.evaluationNeeded:
             t.searchPostNN(pi[index], v[index])
-            index += 1
+        index += 1
 
 
 cdef testByReference(Node *n, int depth):

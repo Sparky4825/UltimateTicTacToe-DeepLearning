@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 
 @ray.remote
 class MCTSBatchActor:
-    def __init__(self, options, toNNQueue, fromNNQueue):
+    def __init__(self, id, options, toNNQueue, fromNNQueue):
+        self.id = id
         self.batchSize = options.CPUBatchSize
         self.cpuct = options.cpuct
         self.numMCTSSims = options.numMCTSSims
@@ -50,7 +51,7 @@ class MCTSBatchActor:
             for _ in range(self.numMCTSSims):
                 # print("Stargin simulation")
                 needsEval = prepareBatch(episodes)
-                self.toNNQueue.put(needsEval)
+                self.toNNQueue.put((self.id, needsEval))
 
                 evalResult = await self.fromNNQueue.get_async()
                 pi, v = evalResult
@@ -69,6 +70,7 @@ class MCTSBatchActor:
                     mostLikelyIndex = np.argmax(pi)
                     pi[mostLikelyIndex] += 1 - sum(pi)
 
+                print("Making move")
                 action = np.random.choice(len(pi), p=pi)
                 ep.takeAction(action)
                 # TODO: Save boards for training
@@ -493,6 +495,25 @@ class Coach:
 
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
+                workers = []
+                fromNNQueues = []
+                toNNQueue = Queue()
+                for i in range(self.args.numCPUForMCTS):
+                    fromNNQueues.append(Queue())
+                    workers.append(
+                        MCTSBatchActor.remote(
+                            len(workers), self.args, toNNQueue, fromNNQueues[-1]
+                        )
+                    )
+
+                    workers[-1].start.remote()
+
+                # Loop until all games are done
+                while True:
+                    workerID, needsEval = toNNQueue.get()
+                    pi, v = self.nnet.predict_on_batch(needsEval)
+                    fromNNQueues[workerID].put((pi, v))
+
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
                 # for _ in tqdm(range(self.args.numEps), desc="Self Play"):

@@ -138,6 +138,9 @@ class NNetWrapper(NeuralNet):
 
         return [prediction_results[0][0], prediction_results[1][0]]
 
+    def predict_on_batch(self, batch):
+        return self.nnet.predict_on_batch(batch)
+
     def predict_batch(self, batch):
         """
         The Neural Network is more efficient running on a batch,

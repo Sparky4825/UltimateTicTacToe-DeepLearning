@@ -878,6 +878,81 @@ using namespace std;
         return result;
     }
 
+    bitset<199> GameState::getCanonicalBoardBitset() {
+        /**
+         * Gets the current board in the Canonical form for
+         * input to the NN.
+         * 
+         * The board is stored in the form 9 boards of 22 bits.
+         * 
+         * Bits 0-17 store the state of each of the 9 spots. If 
+         * the first bit is set, the player to move has this 
+         * spot, if the second bit is set, the opposing player
+         * has the spot.
+         * 
+         * Bit 18 is set if the player to move has won the board
+         * Bit 19 is set if the opposing player has won the board
+         * Bit 20 is set if the board is tied
+         * 
+         * Bit 21 is set if the player is allowed to move on the
+         * board
+         * 
+         * Bit 199 is unused; it is leftover from saving toMove
+         * on a full board.
+         * 
+         * Board is then converted to a vector<int> for output
+         */
+        bitset<199> canonical;
+
+        int toMove = getToMove();
+        int requiredBoard = getRequiredBoard();
+
+        for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                int spotStatus = getPosition(miniboardIndex, spotIndex);
+                
+
+                if (spotStatus == toMove) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
+
+                // If the spot belongs to the other player
+                else if (spotStatus == 2 / toMove) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+
+                // Else neither owns it, zero is default
+
+            }
+
+            int boardStatus = getBoardStatus(miniboardIndex);
+
+            // Mark if the board is won/lost/tied
+            if (boardStatus == toMove) {
+                canonical[miniboardIndex * 22 + 18] = 1;
+            }
+
+            else if (boardStatus == 2 / toMove) {
+                canonical[miniboardIndex * 22 + 19] = 1;
+            }
+
+            else if (boardStatus == 3) {
+                canonical[miniboardIndex * 22 + 20] = 1;
+            }
+
+            // Mark if this board is legal to move in
+            if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
+                canonical[miniboardIndex * 22 + 21] = 1;
+            }
+
+        }
+
+        return canonical;
+    }
+
+
 GameState boardVector2GameState(vector<int> board) {
     GameState result;
     for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {

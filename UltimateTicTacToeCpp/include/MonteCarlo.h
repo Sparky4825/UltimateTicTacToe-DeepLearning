@@ -8,10 +8,25 @@ using namespace std;
 #include <Minimax.h>
 #include <limits>
 
+struct trainingExample {
+    bitset<199> canonicalBoard;
+    int result;
+    float pi[81];
+};
+
+struct trainingExampleVector {
+    vector<int> canonicalBoard;
+    int result;
+    vector<float> pi;
+};
+
 class MCTS {
     float cpuct;
     Node rootNode;
     Node *currentNode;
+
+    vector<trainingExample> trainingPositions;
+
 
     public:
         MCTS();
@@ -31,4 +46,10 @@ class MCTS {
         int getStatus();
         void displayGame();
         string gameToString();
+
+        void saveTrainingExample(vector<float> pi);
+        vector<trainingExample> getTrainingExamples(int result);
+        vector<trainingExampleVector> getTrainingExamplesVector(int result);
+        void purgeTrainingExamples();
+
 };

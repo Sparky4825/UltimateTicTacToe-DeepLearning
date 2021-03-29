@@ -85,6 +85,36 @@ cdef class PyMCTS:
     def gameToString(self):
         return self.mcts.gameToString().decode('UTF-8')
 
+    def saveTrainingExample(self, vector[float] policy):
+        self.mcts.saveTrainingExample(policy)
+
+    def purgeTrainingExamples(self):
+        self.mcts.purgeTrainingExamples()
+
+    def getTrainingExamples(self, int result):
+        """
+        Returns in the format (inputs, targetPi, targetV)
+        """
+        inputs = np.ndarray((0, 199), dtype=np.int)
+        targetV = np.ndarray((0), dtype=np.float)
+        targetPi = np.ndarray((0, 81), dtype=np.float)
+
+
+        cdef trainingExampleVector currentExample
+        cdef vector[trainingExampleVector] trainingExamples = self.mcts.getTrainingExamplesVector(result)
+        cdef int i
+
+        for i in range(trainingExamples.size()):
+            currentExample = trainingExamples[i]
+
+            inputs = np.concatenate((inputs, [currentExample.canonicalBoard]))
+
+            targetV = np.concatenate((targetV, [currentExample.result]))
+
+            targetPi = np.concatenate((targetPi, [currentExample.pi]))
+
+        return inputs, targetPi, targetV
+
 
 def prepareBatch(trees):
     """

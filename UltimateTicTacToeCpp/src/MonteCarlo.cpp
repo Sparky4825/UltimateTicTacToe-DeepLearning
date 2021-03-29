@@ -177,7 +177,6 @@ void MCTS::takeAction(int actionIndex) {
         if (actionIndex == newActionIndex) {
             rootNode = Node(action.board, 0);
             // TODO: Save tree search in between sims
-            // TODO: Do the other boards need to be freed to prevent memory leak?
             return;
         }
     }
@@ -195,4 +194,71 @@ void MCTS::displayGame() {
 
 string MCTS::gameToString() {
     return rootNode.board.gameToString();
+}
+
+void MCTS::saveTrainingExample(vector<float> pi) {
+    /**
+     * Saves the position in the root node to the list of training examples.
+     */
+
+    trainingExample newPosition;
+    newPosition.canonicalBoard = rootNode.board.getCanonicalBoardBitset();
+
+    // Save the pi values to the new position
+    for (int i = 0; i < 81; i++) {
+        newPosition.pi[i] = pi[i];
+    }
+
+    // Save which player is to move; This will later be multiplied by the result of the game
+    // to get the result for the current player
+    if (rootNode.board.getToMove() == 1) {
+        newPosition.result = 1;
+    } else {
+        newPosition.result = -1;
+    }
+
+    trainingPositions.push_back(newPosition);
+}
+
+vector<trainingExample> MCTS::getTrainingExamples(int result) {
+    // Update the result across all positions
+    for (int i = 0; i < trainingPositions.size(); i++) {
+        trainingPositions[i].result *= result;
+    }
+
+    return trainingPositions;
+}
+
+vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
+    for (int i = 0; i < trainingPositions.size(); i++) {
+        trainingPositions[i].result *= result;
+    }
+
+    vector<trainingExampleVector> examplesVector;
+
+    for (trainingExample example : trainingPositions) {
+        trainingExampleVector newPosition;
+        newPosition.result = example.result;
+
+        // Copy the pi and board to the new training example
+        for (int i = 0; i < 199; i++) {
+            newPosition.canonicalBoard.push_back(example.canonicalBoard[i]);
+        }
+
+        for (int i = 0; i < 81; i++) {
+            newPosition.pi.push_back(example.pi[i]);
+        }
+
+        examplesVector.push_back(newPosition);
+
+    }
+
+    return examplesVector;
+}
+
+void MCTS::purgeTrainingExamples() {
+    /**
+     * Clears the training positions from the memory.
+     */
+    trainingPositions.clear();
 }

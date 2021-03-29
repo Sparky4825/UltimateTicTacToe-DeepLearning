@@ -11,7 +11,7 @@ from random import shuffle
 import coloredlogs
 import numpy as np
 import ray
-from ray.util.queue import Queue
+from ray.util.queue import Queue, Empty
 from tqdm import tqdm
 
 from Arena import Arena
@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 
 @ray.remote
 class MCTSBatchActor:
-    def __init__(self, id, options, toNNQueue, fromNNQueue):
+    def __init__(self, id, options, toNNQueue, fromNNQueue, resultsQueue):
         self.id = id
         self.batchSize = options.CPUBatchSize
         self.cpuct = options.cpuct
@@ -36,8 +36,9 @@ class MCTSBatchActor:
 
         self.toNNQueue = toNNQueue
         self.fromNNQueue = fromNNQueue
+        self.resultsQueue = resultsQueue
 
-    async def start(self):
+    def start(self):
         episodes = []
         # Start all episodes
         for i in range(self.batchSize):
@@ -45,15 +46,18 @@ class MCTSBatchActor:
             g = PyGameState()
             episodes[-1].startNewSearch(g)
 
+        results = []
         # Loop until all episodes are complete
-        while True:
+        while len(episodes) > 0:
             print("Staring move")
             for _ in range(self.numMCTSSims):
                 # print("Stargin simulation")
                 needsEval = prepareBatch(episodes)
                 self.toNNQueue.put((self.id, needsEval))
-
-                evalResult = await self.fromNNQueue.get_async()
+                t1 = time.time()
+                evalResult = self.fromNNQueue.get()
+                t2 = time.time()
+                # print(f"Worker waited on queue for {round((t2 - t1) * 1000, 4)} millis")
                 pi, v = evalResult
                 batchResults(episodes, pi, v)
 
@@ -65,22 +69,30 @@ class MCTSBatchActor:
 
                 # Correct a slight rounding error if necessary
                 if sum(pi) != 1:
-                    print("CORRECTING ERROR")
-                    print(pi)
+                    # print("CORRECTING ERROR")
+                    # print(pi)
                     mostLikelyIndex = np.argmax(pi)
                     pi[mostLikelyIndex] += 1 - sum(pi)
 
                 print("Making move")
                 action = np.random.choice(len(pi), p=pi)
                 ep.takeAction(action)
-                # TODO: Save boards for training
+                ep.saveTrainingExample(pi)
                 print(ep.gameToString())
 
                 status = ep.getStatus()
+                # Remove episode and save results when the game is over
                 if status != 0:
                     print("Game over removing it")
-                    # TODO: Save results for training
+                    if status == 1:
+                        results.append(ep.getTrainingExamples(1))
+                    else:
+                        results.append(ep.getTrainingExamples(-1))
+                    print(results)
                     episodes.remove(ep)
+        print("Posting results")
+        self.resultsQueue.put(results)
+        print(f"SIZE {self.resultsQueue.size()}")
 
 
 def test2():
@@ -470,6 +482,272 @@ class Coach:
                 filename=f"{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.pth.tar",
             )
 
+    def profileEpisodesRemote(self):
+        workers = []
+        fromNNQueues = []
+        toNNQueue = Queue()
+        resultsQueue = Queue()
+        for i in range(self.args.numCPUForMCTS):
+            fromNNQueues.append(Queue())
+            workers.append(
+                MCTSBatchActor.remote(
+                    len(workers), self.args, toNNQueue, fromNNQueues[-1], resultsQueue
+                )
+            )
+
+            workers[-1].start.remote()
+
+        # Loop until all games are done
+        overallStart = time.time()
+        count = 0
+        while True:
+            count += 1
+            # if toNNQueue.empty():
+            #     print("NNET MET WITH EMPTY QUEUE")
+            allWorkerID = []
+            evalLengths = []
+            allNeedsEval = np.ndarray((0, 199))
+            if self.args.GPUBatchSize > 0:
+                t1 = time.time()
+                for _ in range(self.args.GPUBatchSize):
+                    workerID, needsEval = toNNQueue.get()
+                    allWorkerID.append(workerID)
+                    evalLengths.append(len(needsEval))
+
+                    allNeedsEval = np.concatenate((allNeedsEval, needsEval), axis=0)
+                t2 = time.time()
+
+            else:
+                workerID, allNeedsEval = toNNQueue.get()
+
+            # print(
+            #     f"GPU waited on queue for {round((t2 - t1) * 1000, 4)} millis"
+            # )
+
+            t1 = time.time()
+            pi, v = self.nnet.predict_on_batch(allNeedsEval)
+            t2 = time.time()
+            # print(f"Evaluation of {len(needsEval)} took {t2 - t1} seconds")
+            evalLength = 0
+            if self.args.GPUBatchSize > 0:
+                for i in range(self.args.GPUBatchSize):
+                    fromNNQueues[allWorkerID[i]].put(
+                        (
+                            pi[evalLength : evalLength + evalLengths[i]],
+                            v[evalLength : evalLength + evalLengths[i]],
+                        )
+                    )
+                    evalLength += evalLengths[i]
+
+            else:
+                fromNNQueues[workerID].put((pi, v))
+
+            if (
+                count
+                == self.args.numMCTSSims
+                * self.args.numCPUForMCTS
+                / self.args.GPUBatchSize
+            ):
+                overallEnd = time.time()
+                elapsed = round((overallEnd - overallStart), 2)
+                total = (
+                    self.args.numMCTSSims
+                    * self.args.CPUBatchSize
+                    * self.args.numCPUForMCTS
+                )
+                print(
+                    f"{total} boards were processed in {elapsed} seconds at {round(total / elapsed, 2)} boards/sec"
+                )
+                exit()
+
+    def profileEpisodesInline(self):
+
+        episodes = []
+        # Start all episodes
+        for i in range(self.args.CPUBatchSize):
+            episodes.append(PyMCTS(self.args.cpuct))
+            g = PyGameState()
+            episodes[-1].startNewSearch(g)
+
+        # Loop until all episodes are complete
+        while True:
+            print("Staring move")
+            overallStart = time.time()
+
+            for _ in range(self.args.numMCTSSims):
+                # print("Stargin simulation")
+                needsEval = prepareBatch(episodes)
+
+                pi, v = self.nnet.predict_on_batch(needsEval)
+                batchResults(episodes, pi, v)
+
+            overallEnd = time.time()
+            elapsed = round((overallEnd - overallStart), 2)
+            total = self.args.numMCTSSims * self.args.CPUBatchSize
+            print(
+                f"{total} boards were processed in {elapsed} seconds at {round(total / elapsed, 2)} boards/sec [INLINE]"
+            )
+            exit()
+
+    def runEpisodesInline(self):
+        episodes = []
+        results = []
+        # Start all episodes
+        for i in range(self.args.CPUBatchSize):
+            episodes.append(PyMCTS(self.args.cpuct))
+            g = PyGameState()
+            episodes[-1].startNewSearch(g)
+
+        # Loop until all episodes are complete
+        while len(episodes) > 0:
+            print("Staring move")
+            overallStart = time.time()
+
+            for _ in range(self.args.numMCTSSims):
+                # print("Stargin simulation")
+                needsEval = prepareBatch(episodes)
+
+                pi, v = self.nnet.predict_on_batch(needsEval)
+                batchResults(episodes, pi, v)
+
+            for ep in episodes:
+                pi = np.array(ep.getActionProb())
+                print("PI")
+                print(pi)
+                pi /= sum(pi)
+
+                # Correct a slight rounding error if necessary
+                if sum(pi) != 1:
+                    # print("CORRECTING ERROR")
+                    # print(pi)
+                    mostLikelyIndex = np.argmax(pi)
+                    pi[mostLikelyIndex] += 1 - sum(pi)
+
+                print("Making move")
+                action = np.random.choice(len(pi), p=pi)
+                ep.takeAction(action)
+                ep.saveTrainingExample(pi)
+                print(ep.gameToString())
+
+                status = ep.getStatus()
+                # Remove episode and save results when the game is over
+                if status != 0:
+                    print("Game over removing it")
+                    if status == 1:
+                        results.append(ep.getTrainingExamples(1))
+                        # TODO Handle draw
+                    else:
+                        results.append(ep.getTrainingExamples(-1))
+                    print(results)
+                    episodes.remove(ep)
+
+        boards = np.ndarray((0, 199), dtype=np.int)
+        pis = np.ndarray((0, 81), dtype=np.float)
+        vs = np.ndarray((0), dtype=np.float)
+
+        for i in results:
+            boards = np.concatenate((boards, i[0]), axis=0)
+            pis = np.concatenate((pis, i[1]), axis=0)
+            vs = np.concatenate((vs, i[2]), axis=0)
+        return boards, pis, vs
+
+    def runEpisodesRemote(self):
+        """
+        Returns a list of training examples in the form
+        [(board, pi, v)]
+        """
+        workers = []
+        fromNNQueues = []
+        toNNQueue = Queue()
+        resultsQueue = Queue()
+        for i in range(self.args.numCPUForMCTS):
+            fromNNQueues.append(Queue())
+            workers.append(
+                MCTSBatchActor.remote(
+                    len(workers), self.args, toNNQueue, fromNNQueues[-1], resultsQueue
+                )
+            )
+
+            workers[-1].start.remote()
+
+        # Loop until all workers have submitted results
+        overallStart = time.time()
+        count = 0
+        done = False
+        while resultsQueue.size() < len(workers):
+            count += 1
+            # if toNNQueue.empty():
+            #     print("NNET MET WITH EMPTY QUEUE")
+            allWorkerID = []
+            evalLengths = []
+            allNeedsEval = np.ndarray((0, 199))
+            if self.args.GPUBatchSize > 0:
+                t1 = time.time()
+                for _ in range(self.args.GPUBatchSize):
+                    try:
+                        workerID, needsEval = toNNQueue.get(timeout=1)
+                    except Empty:
+                        done = True
+                        break
+
+                    allWorkerID.append(workerID)
+                    evalLengths.append(len(needsEval))
+
+                    allNeedsEval = np.concatenate((allNeedsEval, needsEval), axis=0)
+                t2 = time.time()
+
+                if done:
+                    done = False
+                    continue
+
+            else:
+                workerID, allNeedsEval = toNNQueue.get()
+
+            # print(
+            #     f"GPU waited on queue for {round((t2 - t1) * 1000, 4)} millis"
+            # )
+
+            t1 = time.time()
+            pi, v = self.nnet.predict_on_batch(allNeedsEval)
+            t2 = time.time()
+            # print(f"Evaluation of {len(needsEval)} took {t2 - t1} seconds")
+            evalLength = 0
+            if self.args.GPUBatchSize > 0:
+                for i in range(self.args.GPUBatchSize):
+                    fromNNQueues[allWorkerID[i]].put(
+                        (
+                            pi[evalLength : evalLength + evalLengths[i]],
+                            v[evalLength : evalLength + evalLengths[i]],
+                        )
+                    )
+                    evalLength += evalLengths[i]
+
+            else:
+                fromNNQueues[workerID].put((pi, v))
+
+        self.log.info("All workers submitted results")
+        # Free the workers
+        del workers
+
+        trainingExamples = []
+
+        while not resultsQueue.empty():
+            self.log.info("Getting results...")
+            examplesList = resultsQueue.get()
+
+            for ex in examplesList:
+                trainingExamples.append(ex)
+
+        boards = np.ndarray((0, 199), dtype=np.int)
+        pis = np.ndarray((0, 81), dtype=np.float)
+        vs = np.ndarray((0), dtype=np.float)
+
+        for i in trainingExamples:
+            boards = np.concatenate((boards, i[0]), axis=0)
+            pis = np.concatenate((pis, i[1]), axis=0)
+            vs = np.concatenate((vs, i[2]), axis=0)
+        return boards, pis, vs
+
     def learnIterations(self):
         """
         Performs numIters iterations with numEps episodes of self-play in each
@@ -483,37 +761,23 @@ class Coach:
             # bookkeeping
             self.log.info(f"Starting Iter #{i} ...")
 
-            self.log.info("Creating TF-Lite model")
-            tflite_model = self.nnet.convert_to_tflite()
-            self.log.info("TF-Lite model done")
+            # self.log.info("Creating TF-Lite model")
+            # tflite_model = self.nnet.convert_to_tflite()
+            # self.log.info("TF-Lite model done")
 
-            with open(
-                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
-                "wb",
-            ) as f:
-                f.write(tflite_model)
+            # with open(
+            #     f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
+            #     "wb",
+            # ) as f:
+            #     f.write(tflite_model)
 
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
-                workers = []
-                fromNNQueues = []
-                toNNQueue = Queue()
-                for i in range(self.args.numCPUForMCTS):
-                    fromNNQueues.append(Queue())
-                    workers.append(
-                        MCTSBatchActor.remote(
-                            len(workers), self.args, toNNQueue, fromNNQueues[-1]
-                        )
-                    )
 
-                    workers[-1].start.remote()
+                inputs, pis, vs = self.runEpisodesRemote()
+                self.nnet.train(inputs, pis, vs)
 
-                # Loop until all games are done
-                while True:
-                    workerID, needsEval = toNNQueue.get()
-                    pi, v = self.nnet.predict_on_batch(needsEval)
-                    fromNNQueues[workerID].put((pi, v))
-
+                exit()
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
                 # for _ in tqdm(range(self.args.numEps), desc="Self Play"):

@@ -39,6 +39,11 @@ cdef extern from "include/GameState.h":
         boardCoords previousMove
 
 cdef extern from "include/MonteCarlo.h":
+    cdef struct trainingExampleVector:
+        vector[int] canonicalBoard
+        int result
+        vector[float] pi
+
     cdef cppclass MCTS:
         MCTS()
         MCTS(float _cpuct)
@@ -57,4 +62,8 @@ cdef extern from "include/MonteCarlo.h":
         int getStatus()
         void displayGame()
         string gameToString()
+
+        void saveTrainingExample(vector[float] pi)
+        vector[trainingExampleVector] getTrainingExamplesVector(int result)
+        void purgeTrainingExamples()
 

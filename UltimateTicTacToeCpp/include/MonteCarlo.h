@@ -25,4 +25,10 @@ class MCTS {
         void searchPostNN(vector<float> policy, float v);
 
         bool evaluationNeeded;
+
+        vector<float> getActionProb();
+        void takeAction(int actionIndex);
+        int getStatus();
+        void displayGame();
+        string gameToString();
 };

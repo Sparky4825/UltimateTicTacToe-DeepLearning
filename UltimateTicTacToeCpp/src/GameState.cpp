@@ -595,6 +595,64 @@ using namespace std;
         return result;
     }
 
+    string GameState::gameToString() {
+        string output = "";
+
+        if (getToMove() == 1) {
+            output += "X to move\n";
+        } else {
+            output += "O to move\n";
+        }
+
+        int requiredBoard = getRequiredBoard();
+        if (requiredBoard != -1) {
+            output += "Required board: " + to_string(requiredBoard) + '\n';
+        } else {
+            output += "Required board: None\n";
+        }
+
+        int absolutePieceIndex, location;
+        boardCoords coords;
+
+        for (int row = 0; row < 9; row++) {
+            for (int boardRow = 0; boardRow < 3; boardRow++) {
+
+                for (int col = 0; col < 3; col++) {
+                    absolutePieceIndex = (row * 9) + (boardRow * 3) + col;
+                    coords = absoluteIndexToBoardAndPiece(absolutePieceIndex);
+                    location = 2 + (2 * coords.piece);
+
+                    if (board[coords.board][location]) {
+                        output +=  "\033[31mX\033[0m";
+                    } else if (board[coords.board][location + 1]) {
+                        output +=  "\033[94mO\033[0m";
+                    } else {
+                        output +=  " ";
+                    }
+
+                    // Give a divider if not on the last one
+                    if (col != 2) {
+                        output +=  " | ";
+                    }
+                    
+
+                }
+
+                output +=  "\\\\ ";
+
+            }
+
+            if ((row + 1) % 3 != 0){
+                output +=  "\n---------   ---------   ---------   \n";
+            } else {
+                output +=  "\n=================================\n";
+            }
+
+        }
+
+        return output;
+    }
+
     void GameState::displayGame() {
         /**
          * Converts the current board to a human-readable string representation and writes it to cout.

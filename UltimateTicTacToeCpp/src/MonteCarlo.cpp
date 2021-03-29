@@ -19,8 +19,6 @@ void MCTS::backpropagate(Node *finalNode, float result) {
     currentNode = finalNode->parent;
 
     while (currentNode->parent != NULL) {
-        currentNode->n += 1;
-
         if (currentNode->board.getToMove() == 1) {
             currentNode->w += result;
         }
@@ -73,8 +71,9 @@ vector<int> MCTS::searchPreNN() {
 
         status = currentNode->board.getStatus();
 
-        // If the game has ended, backpropagate the results
+        // If the game has ended, backpropagate the results and mark the board as visited
         if (status != 0) {
+            currentNode->n++;
             if (status == 1) {
                 backpropagate(currentNode, 1);
             }
@@ -126,9 +125,76 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
         for (Node &child: currentNode->children) {
             validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece;
             child.p = 1 / numValidMoves;
-            cout << "Warning :: All valid moves masked, all valued equal.";
+            cout << "Warning :: All valid moves masked, all valued equal.\n";
         }
     }
 
     backpropagate(currentNode, v);
+}
+
+vector<float> MCTS::getActionProb() {
+    vector<float> result;
+    float resultSum;
+
+    float totalActionValue = 0;
+    int numValidActions = 0;
+    int maxActionValue = 0;
+    int maxActionIndex = 0;
+
+    for (int i = 0; i < 81; i++) {
+        result.push_back(0);
+    }
+    
+    for (Node &action : rootNode.children) {
+        int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        numValidActions++;
+        totalActionValue += action.n;
+    }
+
+    for (Node &action : rootNode.children) {
+        float actionValue = action.n / totalActionValue;
+        int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        result[actionIndex] = actionValue;
+        resultSum += actionValue;
+
+        if (actionValue > maxActionValue) {
+            maxActionValue = actionValue;
+            maxActionIndex = actionIndex;
+        }
+    }
+
+    // Correct slight rounding error if necessary to ensure sum(result) = 1
+    // if (totalActionValue != 1) {
+    //     result[maxActionIndex] += 1 - totalActionValue;
+    // }
+
+
+    return result;
+}
+
+void MCTS::takeAction(int actionIndex) {
+    for (Node &action : rootNode.children) {
+        
+        int newActionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        if (actionIndex == newActionIndex) {
+            rootNode = Node(action.board, 0);
+            // TODO: Save tree search in between sims
+            // TODO: Do the other boards need to be freed to prevent memory leak?
+            return;
+        }
+    }
+
+    cout << "Warning :: No valid action was found with index " << actionIndex << '\n';
+}
+
+int MCTS::getStatus() {
+    return rootNode.board.getStatus();
+}
+
+void MCTS::displayGame() {
+    rootNode.board.displayGame();
+}
+
+string MCTS::gameToString() {
+    return rootNode.board.gameToString();
 }

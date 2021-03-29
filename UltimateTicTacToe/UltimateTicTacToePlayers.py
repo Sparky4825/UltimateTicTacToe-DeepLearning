@@ -4,7 +4,7 @@ import numpy as np
 import ray
 
 from LiteModel import LiteModel
-from MCTS import MCTS
+from OldMCTS import MCTS
 
 """
 Random and Human-ineracting players for the game of TicTacToe.

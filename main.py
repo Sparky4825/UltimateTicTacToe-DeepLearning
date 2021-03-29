@@ -6,6 +6,7 @@ import coloredlogs
 import ray
 
 from Coach import Coach
+from Coach import testNewMCTS, test2
 
 from UltimateTicTacToe import UltimateTicTacToeGame as UTicTacToe
 from UltimateTicTacToe.keras.NNet import NNetWrapper as nn
@@ -182,5 +183,11 @@ def main():
     c.learnIterations()
 
 
+def mctsCPPTest():
+    ray.init()
+
+    testNewMCTS()
+
+
 if __name__ == "__main__":
-    main()
+    mctsCPPTest()

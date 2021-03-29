@@ -83,6 +83,7 @@ class GameState {
     boardCoords absoluteIndexToBoardAndPiece(int i);
 
     void displayGame();
+    string gameToString();
 
     vector<int> getCanonicalBoard();
     vector<int> getBoardBitset();

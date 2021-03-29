@@ -1,5 +1,6 @@
 from libcpp.vector cimport vector
 from libcpp cimport bool as boolean
+from libcpp.string cimport string
 from Minimax cimport Node
 
 cdef extern from "src/GameState.cpp":
@@ -50,3 +51,10 @@ cdef extern from "include/MonteCarlo.h":
         void searchPostNN(vector[float] policy, float v)
 
         boolean evaluationNeeded
+
+        vector[float] getActionProb()
+        void takeAction(int actionIndex)
+        int getStatus()
+        void displayGame()
+        string gameToString()
+

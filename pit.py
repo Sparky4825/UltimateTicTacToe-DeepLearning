@@ -1,6 +1,6 @@
 import Arena
 from UltimateTicTacToe.UltimateTicTacToeGame import TicTacToeGame
-from MCTS import MCTS
+from OldMCTS import MCTS
 
 # from othello.OthelloGame import OthelloGame
 # from othello.OthelloPlayers import *

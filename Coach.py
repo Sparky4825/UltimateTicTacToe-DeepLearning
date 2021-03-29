@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import random
 import sys
 from collections import deque
 import time
@@ -14,7 +15,7 @@ from ray.util.queue import Queue
 from tqdm import tqdm
 
 from Arena import Arena
-from MCTS import MCTS
+from MCTS import PyMCTS, PyGameState, prepareBatch, batchResults
 from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
 from UltimateTicTacToe.keras.NNet import args
 
@@ -23,6 +24,123 @@ from LiteModel import LiteModel
 import asyncio
 
 log = logging.getLogger(__name__)
+
+
+@ray.remote
+class MCTSBatchActor:
+    def __init__(self, options, toNNQueue, fromNNQueue):
+        self.batchSize = options.CPUBatchSize
+        self.cpuct = options.cpuct
+        self.numMCTSSims = options.numMCTSSims
+
+        self.toNNQueue = toNNQueue
+        self.fromNNQueue = fromNNQueue
+
+    async def start(self):
+        episodes = []
+        # Start all episodes
+        for i in range(self.batchSize):
+            episodes.append(PyMCTS(self.cpuct))
+            g = PyGameState()
+            episodes[-1].startNewSearch(g)
+
+        # Loop until all episodes are complete
+        while True:
+            print("Staring move")
+            for _ in range(self.numMCTSSims):
+                # print("Stargin simulation")
+                needsEval = prepareBatch(episodes)
+                self.toNNQueue.put(needsEval)
+
+                evalResult = await self.fromNNQueue.get_async()
+                pi, v = evalResult
+                batchResults(episodes, pi, v)
+
+            for ep in episodes:
+                pi = np.array(ep.getActionProb())
+                print("PI")
+                print(pi)
+                pi /= sum(pi)
+
+                # Correct a slight rounding error if necessary
+                if sum(pi) != 1:
+                    print("CORRECTING ERROR")
+                    print(pi)
+                    mostLikelyIndex = np.argmax(pi)
+                    pi[mostLikelyIndex] += 1 - sum(pi)
+
+                action = np.random.choice(len(pi), p=pi)
+                ep.takeAction(action)
+                # TODO: Save boards for training
+                print(ep.gameToString())
+
+                status = ep.getStatus()
+                if status != 0:
+                    print("Game over removing it")
+                    # TODO: Save results for training
+                    episodes.remove(ep)
+
+
+def test2():
+    g = PyGameState()
+    tree = PyMCTS(1)
+
+    tree.startNewSearch(g)
+
+    def evaluate(*args):
+        policy = np.full(81, 1 / 81, dtype=np.float)
+
+        value = round(random.random() * random.choice([-1, 1]), 4)
+        return policy, value
+
+    prepareBatch([tree])
+
+    pi, v = evaluate()
+    batchResults([tree], [pi], [v])
+
+    tree.takeAction(0)
+
+    print(tree.gameToString())
+
+    print("Preparding 2nd batch")
+    prepareBatch([tree])
+    print("Done")
+
+    pi, v = evaluate()
+    print("BATCH RESULTS")
+    batchResults([tree], [pi], [v])
+    print("DONE")
+
+    print("TAKING ACTION")
+    tree.takeAction(1)
+
+    print(tree.gameToString())
+
+
+def testNewMCTS():
+    def evaluate(*args):
+        policy = np.full(81, 1 / 81, dtype=np.float)
+
+        value = round(random.random() * random.choice([-1, 1]), 4)
+        return policy, value
+
+    class Options:
+        def __init__(self):
+            self.CPUBatchSize = 1
+            self.cpuct = 1
+            self.numMCTSSims = 81
+
+    toNNQueue = Queue()
+    fromNNQueue = Queue()
+
+    worker = MCTSBatchActor.remote(Options(), toNNQueue, fromNNQueue)
+
+    workerTask = worker.start.remote()
+
+    while True:
+        toBeEval = toNNQueue.get()
+        pi, v = evaluate()
+        fromNNQueue.put([[pi], [v]])
 
 
 @ray.remote

@@ -35,6 +35,13 @@ void BatchManager::stopMCTSThreads() {
     mctsThreads.clear();
 }
 
+int BatchManager::getBatchSize() {
+    mtx.lock();
+    int result = needsEvaluation.size();
+    mtx.unlock();
+    return result; 
+}
+
 batch BatchManager::getBatch() {
     mtx.lock();
     if (needsEvaluation.size() > 1) {

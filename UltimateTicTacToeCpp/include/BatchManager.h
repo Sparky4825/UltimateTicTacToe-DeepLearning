@@ -43,7 +43,18 @@ class BatchManager {
      */
     void stopMCTSThreads();
 
+    /**
+     * Gets the next batch to be evaluated.
+     * 
+     * Throws ______ if needsEvaluation.size() < 1
+     */
     batch getBatch();
+
+    /**
+     * Gets the current number of batches that need evaluation.
+     */
+    int getBatchSize();
+
 
     void putBatch(batch evaluation);
 

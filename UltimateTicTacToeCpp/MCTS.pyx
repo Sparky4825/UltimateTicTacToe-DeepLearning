@@ -99,7 +99,6 @@ cdef class PyMCTS:
         targetV = np.ndarray((0), dtype=np.float)
         targetPi = np.ndarray((0, 81), dtype=np.float)
 
-
         cdef trainingExampleVector currentExample
         cdef vector[trainingExampleVector] trainingExamples = self.mcts.getTrainingExamplesVector(result)
         cdef int i
@@ -178,3 +177,31 @@ def basicTest(PyGameState position, int depth):
     cdef Node start = Node(position.c_gamestate, 0)
 
     testByReference(&start, depth)
+
+
+def compileExamples(trainingExamples):
+    cdef int numExs = sum(i[0].shape[0] for i in trainingExamples)
+    cdef int i, boardsAdded, j
+
+    boards = np.ndarray((numExs, 199), dtype=np.int)
+    pis = np.ndarray((numExs, 81), dtype=np.float)
+    vs = np.ndarray((numExs), dtype=np.float)
+
+    cdef int [:, :] boardsView = boards
+    cdef double [:, :] pisView = pis
+    cdef double [:] vsView = vs
+
+    boardsAdded = 0
+
+    for ex in trainingExamples:
+
+        for i in range(ex[0].shape[0]):
+            for j in range(199):
+                boardsView[boardsAdded, j] = ex[0][i][j]
+            for j in range(81):
+                pisView[boardsAdded, j] = ex[1][i][j]
+            vsView[boardsAdded] = ex[2][i]
+
+            boardsAdded += 1
+
+    return boards, pis, vs

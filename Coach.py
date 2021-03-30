@@ -15,7 +15,7 @@ from ray.util.queue import Queue, Empty
 from tqdm import tqdm
 
 from Arena import Arena
-from MCTS import PyMCTS, PyGameState, prepareBatch, batchResults
+from MCTS import PyMCTS, PyGameState, prepareBatch, batchResults, compileExamples
 from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
 from UltimateTicTacToe.keras.NNet import args
 
@@ -47,9 +47,9 @@ class MCTSBatchActor:
             episodes[-1].startNewSearch(g)
 
         results = []
+        actionsTaken = 0
         # Loop until all episodes are complete
         while len(episodes) > 0:
-            print("Staring move")
             for _ in range(self.numMCTSSims):
                 # print("Stargin simulation")
                 needsEval = prepareBatch(episodes)
@@ -61,10 +61,11 @@ class MCTSBatchActor:
                 pi, v = evalResult
                 batchResults(episodes, pi, v)
 
+            actionsTaken += 1
+            print(f"Taking action {actionsTaken}")
+
             for ep in episodes:
                 pi = np.array(ep.getActionProb())
-                print("PI")
-                print(pi)
                 pi /= sum(pi)
 
                 # Correct a slight rounding error if necessary
@@ -74,25 +75,22 @@ class MCTSBatchActor:
                     mostLikelyIndex = np.argmax(pi)
                     pi[mostLikelyIndex] += 1 - sum(pi)
 
-                print("Making move")
                 action = np.random.choice(len(pi), p=pi)
                 ep.takeAction(action)
                 ep.saveTrainingExample(pi)
-                print(ep.gameToString())
 
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:
-                    print("Game over removing it")
+                    print(f"Game over ({self.id})- {len(episodes) - 1} remaining")
                     if status == 1:
                         results.append(ep.getTrainingExamples(1))
-                    else:
+                    elif status == 2:
                         results.append(ep.getTrainingExamples(-1))
-                    print(results)
+                    else:
+                        results.append(ep.getTrainingExamples(0))
                     episodes.remove(ep)
-        print("Posting results")
         self.resultsQueue.put(results)
-        print(f"SIZE {self.resultsQueue.size()}")
 
 
 def test2():
@@ -363,125 +361,6 @@ class Coach:
 
         return results
 
-    def learnContinuous(self):
-        """
-        Continuously plays games against itself and learns after every game.
-        """
-
-        self.log.info("Starting continuous learning ...")
-
-        self.log.info("Loading previous examples")
-        self.loadExamplesIteration(4)
-
-        gamesLoaded = sum(len(c) for c in self.trainExamplesHistory)
-
-        if gamesLoaded >= self.args.maxlenOfQueue:
-            self.log.info(
-                f"{gamesLoaded} previous examples loaded, skipping pre-training games"
-            )
-        else:
-            self.log.info(
-                f"{gamesLoaded} previous examples loaded, pre-training games are needed"
-            )
-
-            self.log.info("Starting pre-training games")
-
-            self.log.info("Creating TF-Lite model")
-            tflite_model = self.nnet.convert_to_tflite()
-            self.log.info("TF-Lite model done")
-
-            with open(
-                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
-                "wb",
-            ) as f:
-                f.write(tflite_model)
-
-            # Have enough games to start training with
-            gamesQueue = Queue()
-            resultsQueue = Queue()
-
-            iterationTrainExamples = self.runEpisodes(
-                gamesQueue,
-                resultsQueue,
-                False,
-                self.args.numEps,
-                self.args.numCPUForMCTS,
-                self.game,
-                self.args,
-                tflite_model,
-            )
-
-            self.trainExamplesHistory.append(iterationTrainExamples)
-
-            self.log.info("Pre-training games complete")
-
-        gamesCount = 0
-        while True:
-
-            self.log.info("Creating TF-Lite model")
-            tflite_model = self.nnet.convert_to_tflite()
-            self.log.info("TF-Lite model done")
-
-            with open(
-                f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
-                "wb",
-            ) as f:
-                f.write(tflite_model)
-
-            gamesCount += 1
-            self.log.info(f"Start training game-set #{gamesCount}")
-
-            gamesQueue = Queue()
-            resultsQueue = Queue()
-
-            iterationTrainExamples = self.runEpisodes(
-                gamesQueue,
-                resultsQueue,
-                False,
-                self.args.numCPUForMCTS,  # Run one game per CPU being used
-                self.args.numCPUForMCTS,
-                self.game,
-                self.args,
-                tflite_model,
-            )
-
-            self.log.info(
-                f"Game-set complete with {len(iterationTrainExamples)} new positions"
-            )
-
-            self.log.info("Begin pre-fitting processing")
-
-            # TODO: Remove duplicate positions and average their results
-
-            self.trainExamplesHistory.append(iterationTrainExamples)
-            del iterationTrainExamples
-
-            trainExamples = []
-            index = len(self.trainExamplesHistory)
-            while len(trainExamples) < self.args.maxlenOfQueue and index > 0:
-                index -= 1
-
-                trainExamples.extend(self.trainExamplesHistory[index])
-
-            # Remove positions that are too old to be useful
-            self.trainExamplesHistory = self.trainExamplesHistory[index:]
-
-            # Save examples for later use
-            self.saveTrainExamples(gamesCount)
-
-            shuffle(trainExamples)
-
-            self.log.info("Pre-fitting processing done")
-
-            self.log.info("Begin fitting")
-            self.nnet.train(trainExamples, epochs=2)
-            self.log.info("Fitting complete")
-
-            self.nnet.save_checkpoint(
-                folder=self.args.checkpoint,
-                filename=f"{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.pth.tar",
-            )
-
     def profileEpisodesRemote(self):
         workers = []
         fromNNQueues = []
@@ -589,31 +468,49 @@ class Coach:
             )
             exit()
 
-    def runEpisodesInline(self):
-        episodes = []
+    def runArenaInline(self, player1Weights, player2Weights):
+        """
+        Returns in format (player1Wins, player2Wins, draws)
+        :param player1Weights:
+        :param player2Weights:
+        :return:
+        """
+        p1Episodes = []
+        p2Episodes = []
         results = []
         # Start all episodes
-        for i in range(self.args.CPUBatchSize):
-            episodes.append(PyMCTS(self.args.cpuct))
+        for i in range(int(self.args.arenaCompare / 2)):
+            p1Episodes.append(PyMCTS(self.args.cpuct))
             g = PyGameState()
-            episodes[-1].startNewSearch(g)
+            p1Episodes[-1].startNewSearch(g)
+
+            p2Episodes.append(PyMCTS(self.args.cpuct))
+            g = PyGameState()
+            p2Episodes[-1].startNewSearch(g)
+
+        actionsTaken = 0
 
         # Loop until all episodes are complete
-        while len(episodes) > 0:
-            print("Staring move")
+        while len(p1Episodes) > 0:
             overallStart = time.time()
 
+            self.nnet.set_weights(player1Weights)
             for _ in range(self.args.numMCTSSims):
                 # print("Stargin simulation")
-                needsEval = prepareBatch(episodes)
+                needsEval = prepareBatch(p1Episodes)
 
                 pi, v = self.nnet.predict_on_batch(needsEval)
-                batchResults(episodes, pi, v)
+                batchResults(p1Episodes, pi, v)
+            index = -1
 
-            for ep in episodes:
+            actionsTaken += 1
+            print(f"Taking action {actionsTaken}")
+
+            for ep in p1Episodes:
+                index += 1
+                ep2 = p2Episodes[index]
+
                 pi = np.array(ep.getActionProb())
-                print("PI")
-                print(pi)
                 pi /= sum(pi)
 
                 # Correct a slight rounding error if necessary
@@ -623,33 +520,69 @@ class Coach:
                     mostLikelyIndex = np.argmax(pi)
                     pi[mostLikelyIndex] += 1 - sum(pi)
 
-                print("Making move")
                 action = np.random.choice(len(pi), p=pi)
                 ep.takeAction(action)
-                ep.saveTrainingExample(pi)
-                print(ep.gameToString())
+                ep2.takeAction(action)
 
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:
-                    print("Game over removing it")
+                    print(f"Game over - {len(p1Episodes) - 1} remaining")
                     if status == 1:
-                        results.append(ep.getTrainingExamples(1))
-                        # TODO Handle draw
+                        results.append(1)
+                    elif status == 2:
+                        results.append(-1)
                     else:
-                        results.append(ep.getTrainingExamples(-1))
-                    print(results)
-                    episodes.remove(ep)
+                        results.append(0)
+                    p1Episodes.remove(ep)
+                    p2Episodes.remove(p2Episodes[index])
 
-        boards = np.ndarray((0, 199), dtype=np.int)
-        pis = np.ndarray((0, 81), dtype=np.float)
-        vs = np.ndarray((0), dtype=np.float)
+            if len(p1Episodes) == 0:
+                break
 
-        for i in results:
-            boards = np.concatenate((boards, i[0]), axis=0)
-            pis = np.concatenate((pis, i[1]), axis=0)
-            vs = np.concatenate((vs, i[2]), axis=0)
-        return boards, pis, vs
+            self.nnet.set_weights(player2Weights)
+            for _ in range(self.args.numMCTSSims):
+                # print("Stargin simulation")
+                needsEval = prepareBatch(p2Episodes)
+
+                pi, v = self.nnet.predict_on_batch(needsEval)
+                batchResults(p2Episodes, pi, v)
+            index = -1
+
+            actionsTaken += 1
+            print(f"Taking action {actionsTaken}")
+            for ep in p2Episodes:
+                index += 1
+                ep2 = p1Episodes[index]
+
+                pi = np.array(ep.getActionProb())
+                pi /= sum(pi)
+
+                # Correct a slight rounding error if necessary
+                if sum(pi) != 1:
+                    # print("CORRECTING ERROR")
+                    # print(pi)
+                    mostLikelyIndex = np.argmax(pi)
+                    pi[mostLikelyIndex] += 1 - sum(pi)
+
+                action = np.random.choice(len(pi), p=pi)
+                ep.takeAction(action)
+                ep2.takeAction(action)
+
+                status = ep.getStatus()
+                # Remove episode and save results when the game is over
+                if status != 0:
+                    print(f"Game over - {len(p1Episodes) - 1} remaining")
+                    if status == 1:
+                        results.append(1)
+                    elif status == 2:
+                        results.append(-1)
+                    else:
+                        results.append(0)
+                    p2Episodes.remove(ep)
+                    p1Episodes.remove(p1Episodes[index])
+
+        return results.count(1), results.count(-1), results.count(0)
 
     def runEpisodesRemote(self):
         """
@@ -738,14 +671,8 @@ class Coach:
             for ex in examplesList:
                 trainingExamples.append(ex)
 
-        boards = np.ndarray((0, 199), dtype=np.int)
-        pis = np.ndarray((0, 81), dtype=np.float)
-        vs = np.ndarray((0), dtype=np.float)
+        boards, pis, vs = compileExamples(trainingExamples)
 
-        for i in trainingExamples:
-            boards = np.concatenate((boards, i[0]), axis=0)
-            pis = np.concatenate((pis, i[1]), axis=0)
-            vs = np.concatenate((vs, i[2]), axis=0)
         return boards, pis, vs
 
     def learnIterations(self):
@@ -761,164 +688,48 @@ class Coach:
             # bookkeeping
             self.log.info(f"Starting Iter #{i} ...")
 
-            # self.log.info("Creating TF-Lite model")
-            # tflite_model = self.nnet.convert_to_tflite()
-            # self.log.info("TF-Lite model done")
+            self.log.info("Starting self-play")
+            inputs, pis, vs = self.runEpisodesRemote()
 
-            # with open(
-            #     f"litemodels/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.tflite",
-            #     "wb",
-            # ) as f:
-            #     f.write(tflite_model)
-
-            # examples of the iteration
-            if not self.skipFirstSelfPlay or i > 1:
-
-                inputs, pis, vs = self.runEpisodesRemote()
-                self.nnet.train(inputs, pis, vs)
-
-                exit()
-                iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
-
-                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                # Create the actors to run the episodes
-
-                gamesQueue = Queue()
-                resultsQueue = Queue()
-
-                iterationTrainExamples = self.runEpisodes(
-                    gamesQueue,
-                    resultsQueue,
-                    False,
-                    self.args.numEps,
-                    self.args.numCPUForMCTS,
-                    self.game,
-                    self.args,
-                    tflite_model,
-                )
-
-                log.info(
-                    f"Self-games complete with {len(iterationTrainExamples)} positions to train from"
-                )
-
-                # save the iteration examples to the history
-                self.trainExamplesHistory.append(iterationTrainExamples)
-
-            if (
-                len(self.trainExamplesHistory)
-                > self.args.numItersForTrainExamplesHistory
-            ):
-                log.warning(
-                    f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}"
-                )
-                self.trainExamplesHistory.pop(0)
-            # backup history to a file
-            # NB! the examples were collected using the model from the previous iteration, so (i-1)
-            self.saveTrainExamples(i - 1)
-
-            # shuffle examples before training
-            trainExamples = []
-            for e in self.trainExamplesHistory:
-                trainExamples.extend(e)
-
-            for j in range(1000):
-                counts = trainExamples[j][1]
-                board = trainExamples[j][0]
-
-                for index in range(len(counts)):
-                    if counts[index] >= 1 and board[2][int(index / 9)][index % 9] == 0:
-                        self.log.warning("MCTS suggesting invalid move")
-                        self.log.warning(trainExamples[j])
-                        self.log.warning("Board: " + str(board))
-                        self.log.warning("COUNTS " + str(counts))
-                        self.game.display(board)
-                        self.log.warning(self.game.getValidMoves(board, 1))
-                        break
+            self.log.info(f"About to begin training with {len(inputs)} samples")
 
             # TODO: Reduce the number of draws in training examples because they confuse the network
-            shuffle(trainExamples)
+            # Save the rng_state to shuffle each array the say way
+            assert inputs.shape[0] == pis.shape[0]
+            assert inputs.shape[0] == vs.shape[0]
+            rng_state = np.random.get_state()
+            np.random.shuffle(inputs)
+            np.random.set_state(rng_state)
 
-            log.info(f"About to begin training with {len(trainExamples)} samples")
+            np.random.shuffle(pis)
+            np.random.set_state(rng_state)
+
+            np.random.shuffle(vs)
 
             # training new network, keeping a copy of the old one
             previous_weights = self.nnet.get_weights()
 
-            self.nnet.save_checkpoint(
-                folder=self.args.checkpoint, filename="temp.pth.tar"
-            )
+            self.nnet.save_checkpoint(folder="./temp", filename="temp.ckpt")
 
-            # self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-
-            # previous_player = NNetPlayer(
-            #     self.game, self.nnet, previous_weights, self.args
-            # )
-
-            self.nnet.train(trainExamples)
-
-            # Release the RAM for use in the arena competition
-            del trainExamples
-            # self.trainExamplesHistory.pop(0)
-            # TODO: this must be changed to ever use training examples from the past
-
-            log.info("TRAINING COMPLETE")
-
-            log.info("Creating new TF-Lite model")
-            new_tflite_model = self.nnet.convert_to_tflite()
-            self.log.info("TF-Lite model done")
+            self.nnet.train(inputs, pis, vs)
 
             new_weights = self.nnet.get_weights()
 
-            # new_player = NNetPlayer(self.game, self.nnet, new_weights, self.args)
-
             log.info("PITTING AGAINST PREVIOUS VERSION")
-            # arena = Arena(
-            #     lambda x: previous_player.get_move(x),
-            #     lambda x: new_player.get_move(x),
-            #     self.game,
-            # )
 
-            # Have both models play as both sides
-            log.info("Starting Arena round 1")
+            log.info("Starting Arena Round 1")
 
-            gamesQueue = Queue()
-            resultsQueue = Queue()
+            winNew1, winOld1, draw1 = self.runArenaInline(new_weights, previous_weights)
 
-            pwins1, nwins1, draws1 = self.runEpisodes(
-                gamesQueue,
-                resultsQueue,
-                True,
-                self.args.arenaCompare,
-                self.args.numCPUForMCTS,
-                self.game,
-                self.args,
-                tflite_model,
-                True,
-                new_tflite_model,
-            )
+            log.info("Starting Arena Round 2")
+            winOld2, winNew2, draw2 = self.runArenaInline(previous_weights, new_weights)
 
-            log.info("Starting Arena round 2")
-
-            gamesQueue = Queue()
-            resultsQueue = Queue()
-
-            nwins2, pwins2, draws2 = self.runEpisodes(
-                gamesQueue,
-                resultsQueue,
-                True,
-                self.args.arenaCompare,
-                self.args.numCPUForMCTS,
-                self.game,
-                self.args,
-                new_tflite_model,
-                True,
-                tflite_model,
-            )
-
-            pwins = pwins1 + pwins2
-            nwins = nwins1 + nwins2
-            draws = draws1 + draws2
+            pwins = winOld1 + winOld2
+            nwins = winNew1 + winNew2
+            draws = draw1 + draw2
 
             log.info("NEW/PREV WINS : %d / %d ; DRAWS : %d" % (nwins, pwins, draws))
+
             if (
                 pwins + nwins == 0
                 or float(nwins) / (pwins + nwins) < self.args.updateThreshold
@@ -930,7 +741,7 @@ class Coach:
                 self.nnet.set_weights(new_weights)
 
                 self.nnet.save_checkpoint(
-                    folder=self.args.checkpoint, filename="best.pth.tar"
+                    folder=self.args.checkpoint, filename="best.ckpt"
                 )
 
     def getCheckpointFile(self, iteration):

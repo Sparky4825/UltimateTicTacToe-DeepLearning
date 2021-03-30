@@ -64,6 +64,6 @@ cdef extern from "include/MonteCarlo.h":
         string gameToString()
 
         void saveTrainingExample(vector[float] pi)
-        vector[trainingExampleVector] getTrainingExamplesVector(int result)
+        vector[trainingExampleVector] getTrainingExamplesVector(int result) except +
         void purgeTrainingExamples()
 

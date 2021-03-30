@@ -13,6 +13,7 @@ MCTS::MCTS(float _cpuct) {
 
 void MCTS::startNewSearch(GameState position) {
     rootNode = Node(position, 0);
+    rootNode.addChildren();
 }
 
 void MCTS::backpropagate(Node *finalNode, float result) {
@@ -171,6 +172,7 @@ vector<float> MCTS::getActionProb() {
 }
 
 void MCTS::takeAction(int actionIndex) {
+    rootNode.addChildren();
     for (Node &action : rootNode.children) {
         
         int newActionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
@@ -249,7 +251,11 @@ vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
             newPosition.pi.push_back(example.pi[i]);
         }
 
-        examplesVector.push_back(newPosition);
+        // Add all symmetries
+        for (trainingExampleVector symmetry : getSymmetries(newPosition)) {
+            examplesVector.push_back(symmetry);
+
+        }
 
     }
 
@@ -261,4 +267,66 @@ void MCTS::purgeTrainingExamples() {
      * Clears the training positions from the memory.
      */
     trainingPositions.clear();
+}
+
+vector<trainingExampleVector> getSymmetries(trainingExampleVector position) {
+    vector<trainingExampleVector> result;
+
+    vector<vector<int>> boards = getSymmetriesBoard(position.canonicalBoard);
+    vector<vector<float>> pis = getSymmetriesPi(position.pi);
+
+    for (int i = 0; i < 8; i++) {
+        trainingExampleVector newPosition;
+        newPosition.result = position.result;
+        newPosition.canonicalBoard = boards[i];
+        newPosition.pi = pis[i];
+
+        result.push_back(newPosition);
+    }
+
+    return result;
+}
+
+vector<vector<int>> getSymmetriesBoard(vector<int> board) {
+    /**
+     * Gets all of the equivilant position to the given board.
+     */
+    
+
+    vector<vector<int>> result;
+
+
+    for (int i = 0; i < 8; i++) {
+        vector<int> temp;
+        for (int j = 0; j < 199; j++) {
+            
+            temp.push_back(board[symmetriesMapping[i][j]]);
+        }
+
+        result.push_back(temp);
+    }
+
+    return result;
+}
+
+vector<vector<float>> getSymmetriesPi(vector<float> pi) {
+    /**
+     * Gets all of the equivilant position to the given board.
+     */
+    
+    // This code is auto-generated using createGetSymmetries.py
+
+    vector<vector<float>> result;
+
+
+    for (int i = 0; i < 8; i++) {
+        vector<float> temp;
+        for (int j = 0; j < 81; j++) {
+            temp.push_back(pi[symmetriesMappingSingleBoard[i][j]]);
+        }
+
+        result.push_back(temp);
+    }
+
+    return result;
 }

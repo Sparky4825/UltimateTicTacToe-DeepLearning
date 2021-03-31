@@ -6,34 +6,47 @@ using namespace std;
 #include <mutex>
 #include <MonteCarlo.h>
 
+
+#define BATCH_SIZE_DEFAULT      64
+#define CPUCT_DEFAULT           1
+#define SIMS_DEFAULT            500
+
+
 struct batch {
     bool batchRetrieved = true;
-    vector<int> canonicalBoard;
+    vector<vector<int>> canonicalBoards;
     int workerID;
-    float evaluation;
-    vector<float> pi;
+    vector<float> evaluations;
+    vector<vector<float>> pis;
 };
 
+mutex mtx;
+vector<batch> needsEvaluation;
+vector<vector<batch>> fromNN;
+vector<mutex> fromNNmtx;
+
+mutex resultsMTX;
+vector<trainingExampleVector> results;
+
+int ongoingGames;
+
 class BatchManager {
-    private:
+private:
     vector<thread> mctsThreads;
-    vector<trainingExampleVector> results;
-    vector<batch> needsEvaluation;
-    vector<vector<batch>> completedEvaluation;
 
-    mutex mtx;
     bool working = true;
-    int ongoingGames;
 
-    void mctsWorker(int workerID);
-
-    
-    public:
+public:
     BatchManager();
+    BatchManager(int _batchSize, float _cpuct, int _numSims);
+
+    int batchSize = BATCH_SIZE_DEFAULT, numSims = SIMS_DEFAULT;
+    float cpuct = CPUCT_DEFAULT;
+
 
     /**
      * Starts the given number MCTS worker threads.
-     * 
+     *
      * @param num The number of threads to start
      */
     void createMCTSThreads(int num);
@@ -45,7 +58,7 @@ class BatchManager {
 
     /**
      * Gets the next batch to be evaluated.
-     * 
+     *
      * Throws ______ if needsEvaluation.size() < 1
      */
     batch getBatch();
@@ -60,4 +73,11 @@ class BatchManager {
 
     int getOngoingGames();
 
+    vector<trainingExampleVector> getTrainingExamples();
+
 };
+
+void mctsWorker(int workerID, BatchManager* parent);
+
+float RandomFloat(float a, float b);
+int RandomActionWeighted(vector<float> weights);

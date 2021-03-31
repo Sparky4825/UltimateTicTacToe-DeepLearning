@@ -32,6 +32,9 @@ class MCTS {
         MCTS();
         MCTS(float _cupct);
 
+        bool gameOver = false;
+
+
         void startNewSearch(GameState position);
 
         void backpropagate(Node *finalNode, float result);

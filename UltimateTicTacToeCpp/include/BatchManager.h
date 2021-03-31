@@ -10,7 +10,7 @@ using namespace std;
 #define BATCH_SIZE_DEFAULT      64
 #define CPUCT_DEFAULT           1
 #define SIMS_DEFAULT            500
-
+#define NUM_THREADS             1
 
 struct batch {
     bool batchRetrieved = true;
@@ -20,19 +20,8 @@ struct batch {
     vector<vector<float>> pis;
 };
 
-mutex mtx;
-vector<batch> needsEvaluation;
-vector<vector<batch>> fromNN;
-vector<mutex> fromNNmtx;
-
-mutex resultsMTX;
-vector<trainingExampleVector> results;
-
-int ongoingGames;
-
 class BatchManager {
 private:
-    vector<thread> mctsThreads;
 
     bool working = true;
 
@@ -42,6 +31,7 @@ public:
 
     int batchSize = BATCH_SIZE_DEFAULT, numSims = SIMS_DEFAULT;
     float cpuct = CPUCT_DEFAULT;
+    int numThreads = NUM_THREADS;
 
 
     /**
@@ -49,7 +39,7 @@ public:
      *
      * @param num The number of threads to start
      */
-    void createMCTSThreads(int num);
+    void createMCTSThreads();
 
     /**
      * Stops all of the working MCTS threads.
@@ -78,6 +68,8 @@ public:
 };
 
 void mctsWorker(int workerID, BatchManager* parent);
+
+void simple();
 
 float RandomFloat(float a, float b);
 int RandomActionWeighted(vector<float> weights);

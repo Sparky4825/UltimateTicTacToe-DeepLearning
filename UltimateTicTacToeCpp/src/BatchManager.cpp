@@ -10,8 +10,23 @@ using namespace std;
 #include <GameState.h>
 #include <Minimax.h>
 #include <chrono>
+#include <iostream>
 
-#define QUEUE_CHECK_DELAY       20ms
+#define QUEUE_CHECK_DELAY       1ms
+
+int ongoingGames;
+
+
+mutex mtx;
+vector<batch> needsEvaluation;
+vector<vector<batch>> fromNN;
+mutex fromNNmtx[NUM_THREADS];
+
+thread *mctsThreads[NUM_THREADS];
+
+
+mutex resultsMTX;
+vector<trainingExampleVector> results;
 
 float RandomFloat(float a, float b) {
     float random = ((float) rand()) / (float) RAND_MAX;
@@ -55,14 +70,29 @@ BatchManager::BatchManager(int _batchSize, float _cpuct, int _numSims) {
     numSims = _numSims;
 }
 
+void simple() {
+    // this_thread::sleep_for(1000ms);
+    for (int i = 0 ; i < 4; i++) {
+    // cout << "Working\n";
+
+    this_thread::sleep_for(100ms);
+
+    }
+}
+
 void mctsWorker(int workerID, BatchManager *parent) {
+    cout << "Thread created!";
+
     vector<MCTS> episodes;
 
     // Start all of the episodes
     for (int i = 0; i < parent->batchSize; i++) {
         episodes.push_back(MCTS(parent->cpuct));
 
-        episodes.back().startNewSearch(GameState());
+    }
+
+    for (MCTS &ep : episodes) {
+        ep.startNewSearch(GameState());
     }
 
     mtx.lock();
@@ -80,7 +110,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
             needsEval.workerID = workerID;
 
             // Prepare Batch
-            for (MCTS ep : episodes) {
+            for (MCTS &ep : episodes) {
                 if (ep.gameOver) {
                     continue;
                 }
@@ -91,6 +121,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
                     needsEval.canonicalBoards.push_back(newEval);
                 }
             }
+
 
             // Posting evaluation requires the lock
             mtx.lock();
@@ -106,8 +137,11 @@ void mctsWorker(int workerID, BatchManager *parent) {
                     needsEval = fromNN[workerID].back();
                     fromNN[workerID].pop_back();
                     fromNNmtx[workerID].unlock();
+                    // cout << "GOT RESULTS BACK\n";
                     break;
                 }
+
+                // cout << "Results are not back\n";
 
                 fromNNmtx[workerID].unlock();
 
@@ -115,21 +149,35 @@ void mctsWorker(int workerID, BatchManager *parent) {
                 this_thread::sleep_for(QUEUE_CHECK_DELAY);
             }
 
+            // cout << "Broken out of loop EP SIZE " << episodes.size() << '\n';
+
+
+
             // Batch results
             int resultsIndex = 0;
             for (int epIndex = 0; epIndex < episodes.size(); epIndex++) {
                 MCTS ep = episodes[epIndex];
 
                 if (ep.gameOver) {
+                    cout << "Game over!\n";
                     continue;
                 }
 
                 // Skip if no evaluation was needed
                 if (!ep.evaluationNeeded) {
+                    // cout << "Evaluation was not needed\n";
                     continue;
                 }
 
+                // cout << "Starting search post nn\n";
+
+                // ep.currentNode->board.displayGame();
+
+                // cout << "Game diplsayed\n";
+
                 ep.searchPostNN(needsEval.pis[resultsIndex], needsEval.evaluations[resultsIndex]);
+
+                // cout << "Finishing search post nn\n";
 
                 // Move to the next set of results only if an evaluation was needed
                 resultsIndex += 1;
@@ -137,8 +185,10 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
         }
 
+        cout << "Taking action!\n";
+
         // Make moves
-        for (MCTS ep : episodes) {
+        for (MCTS &ep : episodes) {
             if (ep.gameOver) {
                 continue;
             }
@@ -147,6 +197,8 @@ void mctsWorker(int workerID, BatchManager *parent) {
             int action = RandomActionWeighted(probs);
             ep.takeAction(action);
             ep.saveTrainingExample(probs);
+
+            ep.displayGame();
 
             int status = ep.getStatus();
 
@@ -178,21 +230,34 @@ void mctsWorker(int workerID, BatchManager *parent) {
     }
 }
 
-void BatchManager::createMCTSThreads(int num) {
-    for (int i = 0; i < num; i++) {
+void BatchManager::createMCTSThreads() {
+    for (int i = 0; i < numThreads; i++) {
+        cout << "Creating threads\n";
+
         vector<batch> fromNNVector;
 
         // Vector for sending results back
         fromNN.push_back(fromNNVector);
-
-        // Mutex lock for sending completed evaluations
-        fromNNmtx.push_back(mutex());
-
         // Thread the do the work
-        mctsThreads.push_back(thread(mctsWorker, i, this));
+        mctsThreads[i] = new thread(mctsWorker, i, this);
+        // mctsThreads[i] = new thread(simple);
+
+        // mctsThreads[0].join();
+
+
+        cout << "Done\n";
+
+        // mctsThreads[i].join();
+
     }
 }
 
+void BatchManager::stopMCTSThreads() {
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        mctsThreads[i]->join();
+    }
+}
 
 int BatchManager::getBatchSize() {
     mtx.lock();
@@ -203,7 +268,7 @@ int BatchManager::getBatchSize() {
 
 batch BatchManager::getBatch() {
     mtx.lock();
-    if (needsEvaluation.size() > 1) {
+    if (needsEvaluation.size() > 0) {
         batch newBatch = needsEvaluation.back();
         needsEvaluation.pop_back();
         mtx.unlock();
@@ -211,6 +276,8 @@ batch BatchManager::getBatch() {
     }
 
     mtx.unlock();
+
+    cout << "Warning :: Empty batch returned!\n";
     // TODO: Throw exception if the size is < 1 
 }
 

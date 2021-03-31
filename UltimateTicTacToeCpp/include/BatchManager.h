@@ -7,10 +7,12 @@ using namespace std;
 #include <MonteCarlo.h>
 
 
-#define BATCH_SIZE_DEFAULT      64
 #define CPUCT_DEFAULT           1
+
+#define NUM_THREADS             4
+#define BATCH_SIZE_DEFAULT      2048
 #define SIMS_DEFAULT            500
-#define NUM_THREADS             1
+#define PROFILE_ITERATIONS      2
 
 struct batch {
     bool batchRetrieved = true;

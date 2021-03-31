@@ -12,7 +12,7 @@ using namespace std;
 #include <chrono>
 #include <iostream>
 
-#define QUEUE_CHECK_DELAY       1ms
+#define QUEUE_CHECK_DELAY       0.5ms
 
 int ongoingGames;
 
@@ -81,7 +81,13 @@ void simple() {
 }
 
 void mctsWorker(int workerID, BatchManager *parent) {
-    cout << "Thread created!";
+
+    #ifdef PROFILE_ITERATIONS
+    int iterationsComplete = 0;
+    int targetIterations = PROFILE_ITERATIONS;
+    #endif
+
+    cout << "Thread " << workerID << " created!\n";
 
     vector<MCTS> episodes;
 
@@ -101,6 +107,10 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
     int actionsTaken = 0;
     int remainingGames = episodes.size();
+
+    // auto t1 = chrono::steady_clock::now();
+    // auto t2 = chrono::steady_clock::now();
+
 
     while(remainingGames > 0) {
 
@@ -122,13 +132,20 @@ void mctsWorker(int workerID, BatchManager *parent) {
                 }
             }
 
+            // t2 = chrono::steady_clock::now();
+            // cout << "Batch creation took " << (float)chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()  << " milliseconds\n";
 
             // Posting evaluation requires the lock
             mtx.lock();
+
+
+
             needsEvaluation.push_back(needsEval);
             mtx.unlock();
 
             // Wait for the result
+            // auto t3 = chrono::steady_clock::now();
+
             while (true) {
 
                 // If the result is available, get it
@@ -138,6 +155,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
                     fromNN[workerID].pop_back();
                     fromNNmtx[workerID].unlock();
                     // cout << "GOT RESULTS BACK\n";
+                    // t1 = chrono::steady_clock::now();
                     break;
                 }
 
@@ -149,23 +167,24 @@ void mctsWorker(int workerID, BatchManager *parent) {
                 this_thread::sleep_for(QUEUE_CHECK_DELAY);
             }
 
+            // auto t4 = chrono::steady_clock::now();
+            // cout << "Waited for results for " << (float)chrono::duration_cast<std::chrono::milliseconds>(t4-t3).count()  << " milliseconds\n";
+
+
             // cout << "Broken out of loop EP SIZE " << episodes.size() << '\n';
 
 
 
             // Batch results
             int resultsIndex = 0;
-            for (int epIndex = 0; epIndex < episodes.size(); epIndex++) {
-                MCTS ep = episodes[epIndex];
+            for (MCTS &ep : episodes) {
 
                 if (ep.gameOver) {
-                    cout << "Game over!\n";
                     continue;
                 }
 
                 // Skip if no evaluation was needed
                 if (!ep.evaluationNeeded) {
-                    // cout << "Evaluation was not needed\n";
                     continue;
                 }
 
@@ -185,7 +204,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
         }
 
-        cout << "Taking action!\n";
+        // cout << "Taking action!\n";
 
         // Make moves
         for (MCTS &ep : episodes) {
@@ -198,7 +217,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
             ep.takeAction(action);
             ep.saveTrainingExample(probs);
 
-            ep.displayGame();
+            // ep.displayGame();
 
             int status = ep.getStatus();
 
@@ -227,12 +246,24 @@ void mctsWorker(int workerID, BatchManager *parent) {
             }
         }
 
+        #ifdef PROFILE_ITERATIONS
+        iterationsComplete++;
+        if (iterationsComplete >= targetIterations) {
+            cout << "Profile iterations complete\n";
+            mtx.lock();
+            ongoingGames -= episodes.size();
+            mtx.unlock();
+            break;
+        }
+        #endif
+
+        
+
     }
 }
 
 void BatchManager::createMCTSThreads() {
     for (int i = 0; i < numThreads; i++) {
-        cout << "Creating threads\n";
 
         vector<batch> fromNNVector;
 
@@ -243,9 +274,6 @@ void BatchManager::createMCTSThreads() {
         // mctsThreads[i] = new thread(simple);
 
         // mctsThreads[0].join();
-
-
-        cout << "Done\n";
 
         // mctsThreads[i].join();
 

@@ -38,8 +38,8 @@ args = dotdict(
         "load_model": False,
         "load_folder_file": ("./temp/", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 4,
-        "numCPUForMCTS": 2,  # The number of Ray actors to use to add boards to be predicted.
-        "CPUBatchSize": 250,
+        "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
+        "CPUBatchSize": 2048,
         "GPUBatchSize": 1,
     }
 )

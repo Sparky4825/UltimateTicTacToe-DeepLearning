@@ -38,6 +38,9 @@ class MCTSBatchActor:
         self.fromNNQueue = fromNNQueue
         self.resultsQueue = resultsQueue
 
+        self.profile = True
+        self.numIterations = 2
+
     def start(self):
         episodes = []
         # Start all episodes
@@ -48,8 +51,10 @@ class MCTSBatchActor:
 
         results = []
         actionsTaken = 0
+        completeIterations = 0
+        self.going = True
         # Loop until all episodes are complete
-        while len(episodes) > 0:
+        while len(episodes) > 0 and self.going:
             for _ in range(self.numMCTSSims):
                 # print("Stargin simulation")
                 needsEval = prepareBatch(episodes)
@@ -90,6 +95,14 @@ class MCTSBatchActor:
                     else:
                         results.append(ep.getTrainingExamples(0))
                     episodes.remove(ep)
+
+            if self.profile:
+                completeIterations += 1
+
+                if completeIterations >= self.numIterations:
+                    self.going = False
+                    print("Exiting because profile is enabled")
+                    break
         self.resultsQueue.put(results)
 
 
@@ -403,10 +416,10 @@ class Coach:
             #     f"GPU waited on queue for {round((t2 - t1) * 1000, 4)} millis"
             # )
 
-            t1 = time.time()
+            et1 = time.time()
             pi, v = self.nnet.predict_on_batch(allNeedsEval)
-            t2 = time.time()
-            # print(f"Evaluation of {len(needsEval)} took {t2 - t1} seconds")
+            et2 = time.time()
+            print(f"Evaluation of {len(needsEval)} took {et2 - et1} seconds")
             evalLength = 0
             if self.args.GPUBatchSize > 0:
                 for i in range(self.args.GPUBatchSize):
@@ -607,6 +620,7 @@ class Coach:
         overallStart = time.time()
         count = 0
         done = False
+        t1 = time.time()
         while resultsQueue.size() < len(workers):
             count += 1
             # if toNNQueue.empty():
@@ -615,7 +629,6 @@ class Coach:
             evalLengths = []
             allNeedsEval = np.ndarray((0, 199))
             if self.args.GPUBatchSize > 0:
-                t1 = time.time()
                 for _ in range(self.args.GPUBatchSize):
                     try:
                         workerID, needsEval = toNNQueue.get(timeout=1)
@@ -627,7 +640,6 @@ class Coach:
                     evalLengths.append(len(needsEval))
 
                     allNeedsEval = np.concatenate((allNeedsEval, needsEval), axis=0)
-                t2 = time.time()
 
                 if done:
                     done = False
@@ -640,9 +652,10 @@ class Coach:
             #     f"GPU waited on queue for {round((t2 - t1) * 1000, 4)} millis"
             # )
 
-            t1 = time.time()
+            et1 = time.time()
             pi, v = self.nnet.predict_on_batch(allNeedsEval)
-            t2 = time.time()
+            et2 = time.time()
+            # print(f"Evaluation of {len(allNeedsEval)} took {et2 - et1} seconds")
             # print(f"Evaluation of {len(needsEval)} took {t2 - t1} seconds")
             evalLength = 0
             if self.args.GPUBatchSize > 0:
@@ -657,6 +670,10 @@ class Coach:
 
             else:
                 fromNNQueues[workerID].put((pi, v))
+
+        t2 = time.time()
+
+        print(f"Execution complete in {t2 - t1} seconds")
 
         self.log.info("All workers submitted results")
         # Free the workers

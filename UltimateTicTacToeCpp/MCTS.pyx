@@ -15,6 +15,8 @@ import logging
 
 from random import randint
 
+import time
+
 cdef extern from "math.h":
     double sqrt(double m)
 
@@ -115,6 +117,65 @@ cdef class PyMCTS:
         return inputs, targetPi, targetV
 
 
+def runSelfPlayEpisodes(evaluate):
+    cdef BatchManager m
+
+    print("Starting search...")
+
+    m.createMCTSThreads()
+
+    print("Threads made")
+
+    while m.getOngoingGames() == 0:
+        print("Waiting for games to start")
+        time.sleep(0.02)
+
+    cdef int batchesEvaled = 0
+    cdef int boardsEvaled = 0
+    cdef int i, j
+
+    cdef vector[float] newPis
+
+
+    cdef batch start
+
+    cdef int *boardArray
+
+    while m.getOngoingGames() > 0:
+
+        if m.getBatchSize() > 0:
+            batchesEvaled += 1;
+
+            start = m.getBatch()
+
+
+            boardsEvaled += start.canonicalBoards.size()
+
+
+            # boards = np.asarray(<np.int[:start.canonicalBoards.size(), 199:]> &(start.canonicalBoards))
+
+            boards = boardToNp(start)
+
+            # TODO: Convert batch to numpy array
+            pi, v = evaluate(boards)
+
+
+            for i in range(start.canonicalBoards.size()):
+                start.evaluations.push_back(v[i])
+
+                start.pis.push_back(newPis)
+                for j in range(81):
+                    start.pis[i].push_back(pi[i][j])
+
+
+            # TODO: Convert result back to batch
+            m.putBatch(start)
+
+    allTrainingExamples = m.getTrainingExamples()
+
+    return c_compileExamples(allTrainingExamples)
+  
+
 def prepareBatch(trees):
     """
     Takes a python list of MCTS objects and returns a numpy array that needs to be 
@@ -157,6 +218,18 @@ def batchResults(trees, pi, v):
             t.searchPostNN(pi[index], v[index])
         index += 1
 
+cdef np.ndarray boardToNp(batch b):
+    cdef int i, j
+
+    result = np.ndarray((b.canonicalBoards.size(), 199), dtype=np.int)
+
+    cdef int [:, :] resultView = result
+
+    for i in range(b.canonicalBoards.size()):
+        for j in range(199):
+            resultView[i][j] = b.canonicalBoards[i][j]
+
+    return result
 
 cdef testByReference(Node *n, int depth):
     cdef Node *startNode = n
@@ -203,5 +276,28 @@ def compileExamples(trainingExamples):
             vsView[boardsAdded] = ex[2][i]
 
             boardsAdded += 1
+
+    return boards, pis, vs
+
+cdef c_compileExamples(vector[trainingExampleVector] trainingExamples):
+    cdef int numExs = trainingExamples.size()
+    cdef int exIndex, i, j
+
+    boards = np.ndarray((numExs, 199), dtype=np.int)
+    pis = np.ndarray((numExs, 81), dtype=np.float)
+    vs = np.ndarray((numExs), dtype=np.float)
+
+    cdef int [:, :] boardsView = boards
+    cdef double [:, :] pisView = pis
+    cdef double [:] vsView = vs
+
+
+    for exIndex in range(numExs):
+
+        for j in range(199):
+            boardsView[exIndex, j] = trainingExamples[exIndex].canonicalBoard[j]
+        for j in range(81):
+            pisView[exIndex, j] = trainingExamples[exIndex].pi[j]
+        vsView[exIndex] = trainingExamples[exIndex].result
 
     return boards, pis, vs

@@ -9,6 +9,9 @@ cdef extern from "src/GameState.cpp":
 cdef extern from "src/MonteCarlo.cpp":
     pass
 
+cdef extern from "src/BatchManager.cpp":
+    pass
+
 cdef extern from "limits.h":
     cdef float FLT_MAX
 
@@ -66,4 +69,31 @@ cdef extern from "include/MonteCarlo.h":
         void saveTrainingExample(vector[float] pi)
         vector[trainingExampleVector] getTrainingExamplesVector(int result) except +
         void purgeTrainingExamples()
+
+cdef extern from "include/BatchManager.h":
+    cdef struct batch:
+        boolean batchRetrieved
+        vector[vector[int]] canonicalBoards
+        int workerID
+        vector[float] evaluations
+        vector[vector[float]] pis
+
+    cdef cppclass BatchManager:
+        BatchManager()
+        BatchManager(int _batchSize, float _cpuct, int _numSims)
+
+        int batchSize, numSims, numThreads
+        float cpuct
+
+        void createMCTSThreads()
+        void stopMCTSThreads()
+
+        batch getBatch()
+        int getBatchSize()
+
+        void putBatch(batch evaluation)
+
+        int getOngoingGames()
+
+        vector[trainingExampleVector] getTrainingExamples()
 

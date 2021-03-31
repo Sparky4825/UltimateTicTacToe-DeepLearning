@@ -357,3 +357,196 @@ vector<vector<float>> getSymmetriesPi(vector<float> pi) {
 
     return result;
 }
+
+int findCanonicalRotation(vector<int> board) {
+    vector<vector<int>> rotations = getSymmetriesBoard(board);
+
+    // Return the rotation with X in the first position found
+    for (int i = 0; i < 81; i++) {
+        int boardIndex = i / 9;
+        int pieceIndex = i % 9;
+
+        int index = 22 * boardIndex + pieceIndex;
+
+        // Check X
+        int foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have X taken
+        if (foundIndex > -1) {
+            return foundIndex;
+        }
+
+        index++;
+
+        // Check Y
+        foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have Y taken
+        if (foundIndex > -1) {
+            return foundIndex;
+        }
+    }
+
+    // Return the original if all the rotations are the same
+    return 0;
+}
+
+vector<int> getCanonicalBoardRotation(vector<int> board) {
+    vector<vector<int>> rotations = getSymmetriesBoard(board);
+
+    // Return the rotation with X in the first position found
+    for (int i = 0; i < 81; i++) {
+        int boardIndex = i / 9;
+        int pieceIndex = i % 9;
+
+        int index = 22 * boardIndex + pieceIndex;
+
+        // Check X
+        int foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have X taken
+        if (foundIndex > -1) {
+            return rotations[foundIndex];
+        }
+
+        index++;
+
+        // Check Y
+        foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have Y taken
+        if (foundIndex > -1) {
+            return rotations[foundIndex];
+        }
+    }
+
+    // Return the original if all the rotations are the same
+    return rotations[0];
+}
+
+trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector ex) {
+    vector<vector<int>> rotations = getSymmetriesBoard(ex.canonicalBoard);
+    vector<vector<float>> pis = getSymmetriesPi(ex.pi);
+
+    trainingExampleVector result;
+    result.result = ex.result;
+
+    // Return the rotation with X in the first position found
+    for (int i = 0; i < 81; i++) {
+        int boardIndex = i / 9;
+        int pieceIndex = i % 9;
+
+        int index = 22 * boardIndex + pieceIndex;
+
+        // Check X
+        int foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have X taken
+        if (foundIndex > -1) {
+            result.canonicalBoard = rotations[foundIndex];
+            result.pi = pis[foundIndex];
+            return result;
+        }
+
+        index++;
+
+        // Check Y
+        foundIndex = -1;
+        for (int rotIndex = 0; rotIndex < 8; i++) {
+            if (rotations[rotIndex][i] == 1) {
+
+                // If this is the first board with it taken for X
+                if (foundIndex == -1) {
+                    foundIndex = rotIndex;
+
+                // If multiple boards have X taken, it is no good
+                } else if (foundIndex > -1) {
+                    foundIndex = -2;
+                    break;
+                }
+            }
+        }
+        
+        // If there is a position with only one rotation have Y taken
+        if (foundIndex > -1) {
+            result.canonicalBoard = rotations[foundIndex];
+            result.pi = pis[foundIndex];
+            return result;
+        }
+    }
+
+    // Return the original if all the rotations are the same
+
+    return ex;
+}
+

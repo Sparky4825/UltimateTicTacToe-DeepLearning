@@ -15,7 +15,14 @@ from ray.util.queue import Queue, Empty
 from tqdm import tqdm
 
 from Arena import Arena
-from MCTS import PyMCTS, PyGameState, prepareBatch, batchResults, compileExamples
+from MCTS import (
+    PyMCTS,
+    PyGameState,
+    prepareBatch,
+    batchResults,
+    compileExamples,
+    runSelfPlayEpisodes,
+)
 from UltimateTicTacToe.UltimateTicTacToePlayers import NNetPlayer
 from UltimateTicTacToe.keras.NNet import args
 
@@ -38,7 +45,7 @@ class MCTSBatchActor:
         self.fromNNQueue = fromNNQueue
         self.resultsQueue = resultsQueue
 
-        self.profile = True
+        self.profile = False
         self.numIterations = 2
 
     def start(self):
@@ -692,6 +699,9 @@ class Coach:
 
         return boards, pis, vs
 
+    def runEpisodesCpp(self):
+        return runSelfPlayEpisodes(self.nnet.predict_on_batch)
+
     def learnIterations(self):
         """
         Performs numIters iterations with numEps episodes of self-play in each
@@ -706,7 +716,11 @@ class Coach:
             self.log.info(f"Starting Iter #{i} ...")
 
             self.log.info("Starting self-play")
-            inputs, pis, vs = self.runEpisodesRemote()
+            # inputs, pis, vs = self.runEpisodesRemote()
+            inputs, pis, vs = self.runEpisodesCpp()
+
+            with open("trainingData.examples", "wb+") as f:
+                Pickler(f).dump((inputs, pis, vs))
 
             self.log.info(f"About to begin training with {len(inputs)} samples")
 

@@ -11,6 +11,7 @@ using namespace std;
 #include <Minimax.h>
 #include <chrono>
 #include <iostream>
+#include <queue>
 
 #define QUEUE_CHECK_DELAY       0.5ms
 
@@ -18,7 +19,7 @@ int ongoingGames;
 
 
 mutex mtx;
-vector<batch> needsEvaluation;
+queue<batch> needsEvaluation;
 vector<vector<batch>> fromNN;
 mutex fromNNmtx[NUM_THREADS];
 
@@ -140,7 +141,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
 
 
-            needsEvaluation.push_back(needsEval);
+            needsEvaluation.push(needsEval);
             mtx.unlock();
 
             // Wait for the result
@@ -297,8 +298,8 @@ int BatchManager::getBatchSize() {
 batch BatchManager::getBatch() {
     mtx.lock();
     if (needsEvaluation.size() > 0) {
-        batch newBatch = needsEvaluation.back();
-        needsEvaluation.pop_back();
+        batch newBatch = needsEvaluation.front();
+        needsEvaluation.pop();
         mtx.unlock();
         return newBatch;
     }

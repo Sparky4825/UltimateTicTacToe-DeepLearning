@@ -62,3 +62,9 @@ class MCTS {
 vector<vector<int>> getSymmetriesBoard(vector<int> board);
 vector<vector<float>> getSymmetriesPi(vector<float> pi);
 vector<trainingExampleVector> getSymmetries(trainingExampleVector position);
+
+
+int findCanonicalRotation(vector<int> board);
+
+vector<int> getCanonicalBoardRotation(vector<int> board);
+trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector ex);

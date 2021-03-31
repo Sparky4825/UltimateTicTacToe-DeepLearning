@@ -9,10 +9,9 @@ using namespace std;
 
 #define CPUCT_DEFAULT           1
 
-#define NUM_THREADS             4
-#define BATCH_SIZE_DEFAULT      2048
-#define SIMS_DEFAULT            500
-#define PROFILE_ITERATIONS      2
+#define NUM_THREADS             2
+#define BATCH_SIZE_DEFAULT      750
+#define SIMS_DEFAULT            750
 
 struct batch {
     bool batchRetrieved = true;

@@ -146,6 +146,9 @@ def runSelfPlayEpisodes(evaluate):
         if m.getBatchSize() > 0:
             batchesEvaled += 1;
 
+            if batchesEvaled % 1000 == 0:
+                print(f"{batchesEvaled} batches evaluated / f{3 * 750 * 50}")
+
             start = m.getBatch()
 
 

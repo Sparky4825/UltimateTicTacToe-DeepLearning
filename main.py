@@ -29,8 +29,8 @@ args = dotdict(
         "arenaTempThreshold": 5,  #
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 300000,  # Number of game examples to train the neural networks.
-        "numMCTSSims": 81,  # Number of games moves for MCTS to simulate.
-        "arenaCompare": 40,  # Number of games to play during arena play to determine if new net will be accepted.
+        "numMCTSSims": 750,  # Number of games moves for MCTS to simulate.
+        "arenaCompare": 100,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 1,
         "checkpoint": "./temp/",
         # 'load_model': False,
@@ -41,6 +41,7 @@ args = dotdict(
         "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 256,
         "GPUBatchSize": 1,
+        "skipFirstSelfPlay": True,
     }
 )
 
@@ -127,7 +128,7 @@ def model_illustrate():
 
 def train_only():
 
-    ray.init()
+    # ray.init()
 
     log.info("Loading %s...", UTicTacToe.TicTacToeGame.__name__)
     g = UTicTacToe.TicTacToeGame()
@@ -136,21 +137,25 @@ def train_only():
     nnet = nn(g)
 
     # modelFile = os.path.join(args.load_folder_file[0], args.load_folder_file[1])
-    examplesFile = "temp/checkpoint_0.pth.tar.examples"
+    examplesFile = "trainingData.examples"
 
     with open(examplesFile, "rb") as f:
-        trainExamplesHistory = Unpickler(f).load()
+        inputs, pis, vs = Unpickler(f).load()
 
-    trainExamples = []
-    for e in trainExamplesHistory:
-        trainExamples.extend(e)
-    shuffle(trainExamples)
+    rng_state = np.random.get_state()
+    np.random.shuffle(inputs)
+    np.random.set_state(rng_state)
 
-    trainExamples = trainExamples[:120000]
+    np.random.shuffle(pis)
+    np.random.set_state(rng_state)
 
-    log.info(f"About to begin training with {len(trainExamples)} samples")
+    np.random.shuffle(vs)
 
-    nnet.train(trainExamples)
+    # trainExamples = trainExamples[:120000]
+
+    log.info(f"About to begin training with {len(inputs)} samples")
+
+    nnet.train(inputs, pis, vs)
 
 
 def main():

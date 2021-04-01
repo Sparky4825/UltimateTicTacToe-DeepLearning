@@ -175,7 +175,6 @@ void mctsWorker(int workerID, BatchManager *parent) {
             // cout << "Broken out of loop EP SIZE " << episodes.size() << '\n';
 
 
-
             // Batch results
             int resultsIndex = 0;
             for (MCTS &ep : episodes) {
@@ -205,8 +204,6 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
         }
 
-        // cout << "Taking action!\n";
-
         // Make moves
         for (MCTS &ep : episodes) {
             if (ep.gameOver) {
@@ -215,8 +212,9 @@ void mctsWorker(int workerID, BatchManager *parent) {
             vector<float> probs = ep.getActionProb();
  
             int action = RandomActionWeighted(probs);
-            ep.takeAction(action);
             ep.saveTrainingExample(probs);
+            ep.takeAction(action);
+            
 
             // ep.displayGame();
 
@@ -327,5 +325,8 @@ vector<trainingExampleVector> BatchManager::getTrainingExamples() {
     resultsMTX.lock();
     vector<trainingExampleVector> allExamples = results;
     resultsMTX.unlock();
+
+    // TODO: Get canonical rotation; combine identical results; get all possible rotations
+
     return allExamples;
 }

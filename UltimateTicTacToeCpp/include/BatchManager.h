@@ -10,7 +10,7 @@ using namespace std;
 #define CPUCT_DEFAULT           1
 
 #define NUM_THREADS             2
-#define BATCH_SIZE_DEFAULT      750
+#define BATCH_SIZE_DEFAULT      512
 #define SIMS_DEFAULT            750
 
 struct batch {

@@ -170,6 +170,7 @@ if __name__ == "__main__":
         for j in range(9):
             miniboardMapping[-1].append(mini[j])
     print(miniboardMapping)
+    print("All mapping")
     print(allMapping)
 
     allTogether = []

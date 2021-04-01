@@ -717,10 +717,17 @@ class Coach:
 
             self.log.info("Starting self-play")
             # inputs, pis, vs = self.runEpisodesRemote()
-            inputs, pis, vs = self.runEpisodesCpp()
 
-            with open("trainingData.examples", "wb+") as f:
-                Pickler(f).dump((inputs, pis, vs))
+            if i > 1 or not self.args.skipFirstSelfPlay:
+                inputs, pis, vs = self.runEpisodesCpp()
+
+                with open("trainingData.examples", "wb+") as f:
+                    Pickler(f).dump((inputs, pis, vs))
+
+            else:
+                self.log.info("Loading examples from file...")
+                with open("trainingData.examples", "rb") as f:
+                    inputs, pis, vs = Unpickler(f).load()
 
             self.log.info(f"About to begin training with {len(inputs)} samples")
 

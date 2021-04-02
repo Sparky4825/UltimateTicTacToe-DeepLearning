@@ -23,25 +23,25 @@ coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 
 args = dotdict(
     {
-        "numIters": 20,
+        "numIters": 10,
         "numEps": 350,  # Number of complete self-play games to simulate during a new iteration.
         "tempThreshold": 15,  #
         "arenaTempThreshold": 5,  #
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 300000,  # Number of game examples to train the neural networks.
-        "numMCTSSims": 750,  # Number of games moves for MCTS to simulate.
+        "numMCTSSims": 800,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 100,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 1,
         "checkpoint": "./temp/",
         # 'load_model': False,
         # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
-        "load_model": False,
-        "load_folder_file": ("./temp/", "best.pth.tar"),
+        "load_model": True,
+        "load_folder_file": ("./temp/", "best.ckpt"),
         "numItersForTrainExamplesHistory": 4,
         "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 256,
         "GPUBatchSize": 1,
-        "skipFirstSelfPlay": True,
+        "skipFirstSelfPlay": False,
     }
 )
 
@@ -136,26 +136,49 @@ def train_only():
     log.info("Loading Neural Network (Ray actor)...")
     nnet = nn(g)
 
+    if args.load_model:
+        log.info(
+            'Loading checkpoint "%s/%s"...',
+            args.load_folder_file[0],
+            args.load_folder_file[1],
+        )
+        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
+
     # modelFile = os.path.join(args.load_folder_file[0], args.load_folder_file[1])
     examplesFile = "trainingData.examples"
 
     with open(examplesFile, "rb") as f:
         inputs, pis, vs = Unpickler(f).load()
 
-    rng_state = np.random.get_state()
-    np.random.shuffle(inputs)
-    np.random.set_state(rng_state)
+    validate_size = int(len(inputs) / 20)
 
-    np.random.shuffle(pis)
-    np.random.set_state(rng_state)
+    validate_boards = inputs[:validate_size]
+    val_pis = pis[:validate_size]
+    val_vs = vs[:validate_size]
 
-    np.random.shuffle(vs)
+    inputs = inputs[validate_size:]
 
-    # trainExamples = trainExamples[:120000]
+    pis = pis[validate_size:]
 
-    log.info(f"About to begin training with {len(inputs)} samples")
+    vs = vs[validate_size:]
 
-    nnet.train(inputs, pis, vs)
+    validate = (validate_boards, val_pis, val_vs)
+
+    while True:
+        rng_state = np.random.get_state()
+        np.random.shuffle(inputs)
+        np.random.set_state(rng_state)
+
+        np.random.shuffle(pis)
+        np.random.set_state(rng_state)
+
+        np.random.shuffle(vs)
+
+        # trainExamples = trainExamples[:120000]
+
+        log.info(f"About to begin training with {len(inputs)} samples")
+
+        nnet.train(inputs, pis, vs, validation=validate, epochs=15)
 
 
 def main():
@@ -196,4 +219,4 @@ def mctsCPPTest():
 
 
 if __name__ == "__main__":
-    main()
+    train_only()

@@ -44,7 +44,7 @@ cdef extern from "include/GameState.h":
 cdef extern from "include/MonteCarlo.h":
     cdef struct trainingExampleVector:
         vector[int] canonicalBoard
-        int result
+        float result
         vector[float] pi
 
     cdef cppclass MCTS:

@@ -81,7 +81,7 @@ class NNetWrapper(NeuralNet):
     def set_weights(self, weights):
         self.nnet.set_weights(weights)
 
-    def train(self, inputs, targetPis, targetVs, epochs=None):
+    def train(self, inputs, targetPis, targetVs, epochs=None, validation=None):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
@@ -93,16 +93,25 @@ class NNetWrapper(NeuralNet):
         if epochs is None:
             epochs = self.args.epochs
 
-        validate_size = int(len(inputs) / 20)
+        if validation is None:
+            validate_size = int(len(inputs) / 20)
 
-        validate_boards = inputs[:validate_size]
-        inputs = inputs[validate_size:]
+            validate_boards = inputs[:validate_size]
+            val_pis = targetPis[:validate_size]
+            val_vs = targetVs[:validate_size]
 
-        val_pis = targetPis[:validate_size]
-        target_pis = targetPis[validate_size:]
+            inputs = inputs[validate_size:]
 
-        val_vs = targetVs[:validate_size]
-        target_vs = targetVs[validate_size:]
+            target_pis = targetPis[validate_size:]
+
+            target_vs = targetVs[validate_size:]
+        else:
+            validate_boards = validation[0]
+            val_pis = validation[1]
+            val_vs = validation[2]
+
+            target_pis = targetPis
+            target_vs = targetVs
 
         self.nnet.fit(
             x=inputs,

@@ -9,9 +9,9 @@ using namespace std;
 
 #define CPUCT_DEFAULT           1
 
-#define NUM_THREADS             2
-#define BATCH_SIZE_DEFAULT      512
-#define SIMS_DEFAULT            750
+#define NUM_THREADS             4
+#define BATCH_SIZE_DEFAULT      300
+#define SIMS_DEFAULT            800
 
 struct batch {
     bool batchRetrieved = true;
@@ -74,3 +74,8 @@ void simple();
 
 float RandomFloat(float a, float b);
 int RandomActionWeighted(vector<float> weights);
+
+/**
+ * Add the newEx into the running average for Pi and Result for exisiting.
+ */
+void addExampleToTrainingVector(trainingExampleVector *existing, trainingExampleVector *newEx);

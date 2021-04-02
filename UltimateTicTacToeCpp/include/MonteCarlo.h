@@ -16,8 +16,9 @@ struct trainingExample {
 
 struct trainingExampleVector {
     vector<int> canonicalBoard;
-    int result;
+    float result;
     vector<float> pi;
+    int timesSeen = 1;
 };
 
 class MCTS {

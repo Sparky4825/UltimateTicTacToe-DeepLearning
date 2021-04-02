@@ -76,6 +76,7 @@ vector<int> MCTS::searchPreNN() {
     Node *child;
 
     currentNode->addChildren();
+    currentNode->n++;
 
     float bestUCB = -1 * numeric_limits<float>::max();
     float u, q, v;
@@ -86,7 +87,6 @@ vector<int> MCTS::searchPreNN() {
 
     // Search until an unexplored node is found
     while (currentNode->hasChildren) {
-        currentNode->n += 1;
 
         // Pick the action with the highest upper confidence bound
         bestUCB = -1 * numeric_limits<float>::max();
@@ -96,7 +96,8 @@ vector<int> MCTS::searchPreNN() {
             }
             else {
                 // Always explore an unexplored node
-                u = numeric_limits<float>::max();
+                bestAction = &child;
+                break;
             }
 
             if (u > bestUCB) {
@@ -106,12 +107,13 @@ vector<int> MCTS::searchPreNN() {
         }
 
         currentNode = bestAction;
+        currentNode->n++;
+
 
         status = currentNode->board.getStatus();
 
         // If the game has ended, backpropagate the results and mark the board as visited
         if (status != 0) {
-            currentNode->n++;
             if (status == 1) {
                 backpropagate(currentNode, 1);
             }
@@ -288,11 +290,7 @@ vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
             newPosition.pi.push_back(example.pi[i]);
         }
 
-        // Add all symmetries
-        for (trainingExampleVector symmetry : getSymmetries(newPosition)) {
-            examplesVector.push_back(symmetry);
-
-        }
+        examplesVector.push_back(newPosition);
 
     }
 

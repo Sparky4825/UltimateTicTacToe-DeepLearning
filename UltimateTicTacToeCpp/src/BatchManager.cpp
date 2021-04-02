@@ -321,12 +321,57 @@ int BatchManager::getOngoingGames() {
     return result;
 }
 
+void addExampleToTrainingVector(trainingExampleVector *existing, trainingExampleVector *newEx) {
+    // Average each value of pi
+    int previousWeight = existing->timesSeen;
+    for (int i = 0; i < 81; i++) {
+        existing->pi[i] = (existing->pi[i] * previousWeight + newEx->pi[i]) / (previousWeight + 1);
+    }
+
+    // Average the result value
+    existing->result = (float)(existing->result * previousWeight + newEx->result) / (float)(previousWeight + 1);
+
+    existing->timesSeen++;
+}
+
 vector<trainingExampleVector> BatchManager::getTrainingExamples() {
     resultsMTX.lock();
     vector<trainingExampleVector> allExamples = results;
     resultsMTX.unlock();
 
-    // TODO: Get canonical rotation; combine identical results; get all possible rotations
+    vector<trainingExampleVector> trimmedExamples;
+    int foundIndex;
+
+    for (trainingExampleVector &ex : allExamples) {
+        // Search for the board in the examples already found
+        foundIndex = -1;
+        trainingExampleVector exCanonical = getCanonicalTrainingExampleRotation(ex);
+
+        for (int i = 0; i < trimmedExamples.size(); i++) {
+            if (exCanonical.canonicalBoard == trimmedExamples[i].canonicalBoard) {
+                foundIndex = i;
+                break;
+            }
+        }
+
+        // If the board is already found, update the existing position
+        if (foundIndex > -1) {
+            addExampleToTrainingVector(&(trimmedExamples[foundIndex]), &exCanonical);
+        }
+        // If new position, add it for the first time
+        else {
+            trimmedExamples.push_back(exCanonical);
+        }
+    }
+
+    // Get all possible rotations of the trimmed examples
+    allExamples.clear();
+
+    for (trainingExampleVector &ex : trimmedExamples) {
+        vector<trainingExampleVector> rotations = getSymmetries(ex);
+
+        allExamples.insert(allExamples.end(), rotations.begin(), rotations.end());
+    }
 
     return allExamples;
 }

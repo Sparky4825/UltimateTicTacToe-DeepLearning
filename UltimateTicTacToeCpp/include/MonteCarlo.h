@@ -7,6 +7,8 @@ using namespace std;
 #include <GameState.h>
 #include <Minimax.h>
 #include <limits>
+#include <dirichlet.h>
+
 
 struct trainingExample {
     bitset<199> canonicalBoard;
@@ -19,13 +21,27 @@ struct trainingExampleVector {
     float result;
     vector<float> pi;
     int timesSeen = 1;
+
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int version) {
+        ar & canonicalBoard;
+        ar & result;
+        ar & pi;
+        ar & timesSeen;
+    }
 };
 
+random_device rd;
+
+
 class MCTS {
-    float cpuct;
+    float cpuct = 1;
+    double dirichlet_a = 0.8;
 
     vector<trainingExample> trainingPositions;
 
+    mt19937 gen;
+    dirichlet_distribution<mt19937> dirichlet;
 
     public:
     Node rootNode;
@@ -33,7 +49,7 @@ class MCTS {
 
 
         MCTS();
-        MCTS(float _cupct);
+        MCTS(float _cupct, double _dirichlet);
 
         bool gameOver = false;
 
@@ -57,6 +73,8 @@ class MCTS {
         vector<trainingExample> getTrainingExamples(int result);
         vector<trainingExampleVector> getTrainingExamplesVector(int result);
         void purgeTrainingExamples();
+
+        vector<double> dir(double a, int dim);
 
 };
 

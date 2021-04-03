@@ -25,3 +25,5 @@ logs/
 *.tflite
 
 *.log
+
+boost_1_75_0/

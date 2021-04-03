@@ -12,6 +12,7 @@ using namespace std;
 #include <chrono>
 #include <iostream>
 #include <queue>
+#include <deque>
 
 #define QUEUE_CHECK_DELAY       0.5ms
 
@@ -21,12 +22,13 @@ int ongoingGames;
 mutex mtx;
 queue<batch> needsEvaluation;
 vector<vector<batch>> fromNN;
-mutex fromNNmtx[NUM_THREADS];
+mutex fromNNmtx[MAX_THREADS];
 
-thread *mctsThreads[NUM_THREADS];
+thread *mctsThreads[MAX_THREADS];
 
 
 mutex resultsMTX;
+deque<vector<trainingExampleVector>> resultsHistory;
 vector<trainingExampleVector> results;
 
 float RandomFloat(float a, float b) {
@@ -62,13 +64,17 @@ int RandomActionWeighted(vector<float> weights) {
 }
 
 BatchManager::BatchManager() {
-
 }
 
-BatchManager::BatchManager(int _batchSize, float _cpuct, int _numSims) {
+BatchManager::BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x) {
     batchSize = _batchSize;
     cpuct = _cpuct;
     numSims = _numSims;
+    dirichlet_a = _dirichlet_a;
+    dirichlet_x = _dirichlet_x;
+    if (_numThreads > 0 && _numThreads <= MAX_THREADS) {
+        numThreads = _numThreads;
+    }
 }
 
 void simple() {
@@ -94,7 +100,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
     // Start all of the episodes
     for (int i = 0; i < parent->batchSize; i++) {
-        episodes.push_back(MCTS(parent->cpuct));
+        episodes.push_back(MCTS(parent->cpuct, parent->dirichlet_a));
 
     }
 
@@ -138,9 +144,6 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
             // Posting evaluation requires the lock
             mtx.lock();
-
-
-
             needsEvaluation.push(needsEval);
             mtx.unlock();
 
@@ -210,9 +213,22 @@ void mctsWorker(int workerID, BatchManager *parent) {
                 continue;
             }
             vector<float> probs = ep.getActionProb();
- 
-            int action = RandomActionWeighted(probs);
+
+            // Save probability before adding noise
             ep.saveTrainingExample(probs);
+
+            // Add dirichlet noise
+            int numActions = ep.rootNode.children.size();
+            vector<double> dir = ep.dir(parent->dirichlet_a, numActions);
+            int i = 0;
+            for (float &prob : probs) {
+                if (prob != 0) {
+                    prob = parent->dirichlet_x * prob + (1 - parent->dirichlet_x) * dir[i];
+                    i++;
+                }
+            }
+    
+            int action = RandomActionWeighted(probs);
             ep.takeAction(action);
             
 
@@ -281,7 +297,7 @@ void BatchManager::createMCTSThreads() {
 
 void BatchManager::stopMCTSThreads() {
 
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < MAX_THREADS; i++) {
         mctsThreads[i]->join();
     }
 }
@@ -334,39 +350,58 @@ void addExampleToTrainingVector(trainingExampleVector *existing, trainingExample
     existing->timesSeen++;
 }
 
-vector<trainingExampleVector> BatchManager::getTrainingExamples() {
+void BatchManager::saveTrainingExampleHistory() {
+    // Get the results and then clear them
     resultsMTX.lock();
     vector<trainingExampleVector> allExamples = results;
+    results.clear();
     resultsMTX.unlock();
+
+    resultsHistory.push_front(allExamples);
+
+}
+
+vector<trainingExampleVector> BatchManager::getTrainingExamples() {
+    return getTrainingExamples(resultsHistory.size());
+}
+
+vector<trainingExampleVector> BatchManager::getTrainingExamples(int pastIterations) {
+
+    if (pastIterations > resultsHistory.size()) {
+        pastIterations = resultsHistory.size();
+    }
+
 
     vector<trainingExampleVector> trimmedExamples;
     int foundIndex;
 
-    for (trainingExampleVector &ex : allExamples) {
-        // Search for the board in the examples already found
-        foundIndex = -1;
-        trainingExampleVector exCanonical = getCanonicalTrainingExampleRotation(ex);
+    for (int historyIndex = 0; historyIndex < pastIterations; historyIndex++) {
+        for (trainingExampleVector &ex : resultsHistory[historyIndex]) {
+            // Search for the board in the examples already found
+            foundIndex = -1;
+            trainingExampleVector exCanonical = getCanonicalTrainingExampleRotation(ex);
 
-        for (int i = 0; i < trimmedExamples.size(); i++) {
-            if (exCanonical.canonicalBoard == trimmedExamples[i].canonicalBoard) {
-                foundIndex = i;
-                break;
+            for (int i = 0; i < trimmedExamples.size(); i++) {
+                if (exCanonical.canonicalBoard == trimmedExamples[i].canonicalBoard) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+
+            // If the board is already found, update the existing position
+            if (foundIndex > -1) {
+                addExampleToTrainingVector(&(trimmedExamples[foundIndex]), &exCanonical);
+            }
+            // If new position, add it for the first time
+            else {
+                trimmedExamples.push_back(exCanonical);
             }
         }
-
-        // If the board is already found, update the existing position
-        if (foundIndex > -1) {
-            addExampleToTrainingVector(&(trimmedExamples[foundIndex]), &exCanonical);
-        }
-        // If new position, add it for the first time
-        else {
-            trimmedExamples.push_back(exCanonical);
-        }
     }
+        
 
     // Get all possible rotations of the trimmed examples
-    allExamples.clear();
-
+    vector<trainingExampleVector>  allExamples;
     for (trainingExampleVector &ex : trimmedExamples) {
         vector<trainingExampleVector> rotations = getSymmetries(ex);
 
@@ -374,4 +409,10 @@ vector<trainingExampleVector> BatchManager::getTrainingExamples() {
     }
 
     return allExamples;
+}
+
+void BatchManager::purgeHistory(int iterationsToSave) {
+    while (resultsHistory.size() > iterationsToSave) {
+        resultsHistory.pop_back();
+    }
 }

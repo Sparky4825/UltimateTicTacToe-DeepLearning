@@ -56,8 +56,8 @@ cdef class PyGameState:
 
 cdef class PyMCTS:
     cdef MCTS mcts
-    def __cinit__(self, cpuct):
-        self.mcts = MCTS(cpuct)
+    def __cinit__(self, cpuct, dirichlet=1):
+        self.mcts = MCTS(cpuct, dirichlet)
 
     def startNewSearch(self, PyGameState position):
         self.mcts.startNewSearch(position.c_gamestate)
@@ -117,8 +117,8 @@ cdef class PyMCTS:
         return inputs, targetPi, targetV
 
 
-def runSelfPlayEpisodes(evaluate):
-    cdef BatchManager m
+def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=850, float cpuct=1, double dir_a=0.8, double dir_x=0.5):
+    cdef BatchManager m = BatchManager(batchSize, numThreads, cpuct, sims, dir_a, dir_x)
 
     print("Starting search...")
 
@@ -173,7 +173,7 @@ def runSelfPlayEpisodes(evaluate):
 
             # TODO: Convert result back to batch
             m.putBatch(start)
-
+    m.saveTrainingExampleHistory()
     allTrainingExamples = m.getTrainingExamples()
 
     return c_compileExamples(allTrainingExamples)

@@ -533,14 +533,20 @@ class Coach:
                 pi = np.array(ep.getActionProb())
                 pi /= sum(pi)
 
-                # Correct a slight rounding error if necessary
-                if sum(pi) != 1:
-                    # print("CORRECTING ERROR")
-                    # print(pi)
-                    mostLikelyIndex = np.argmax(pi)
-                    pi[mostLikelyIndex] += 1 - sum(pi)
+                # Choose action randomly if within tempThreshold
+                if actionsTaken <= self.args.tempThreshold:
+                    # Correct a slight rounding error if necessary
+                    if sum(pi) != 1:
+                        # print("CORRECTING ERROR")
+                        # print(pi)
+                        mostLikelyIndex = np.argmax(pi)
+                        pi[mostLikelyIndex] += 1 - sum(pi)
 
-                action = np.random.choice(len(pi), p=pi)
+                    action = np.random.choice(len(pi), p=pi)
+                else:
+                    # Take best action
+                    action = np.argmax(pi)
+
                 ep.takeAction(action)
                 ep2.takeAction(action)
 
@@ -578,14 +584,20 @@ class Coach:
                 pi = np.array(ep.getActionProb())
                 pi /= sum(pi)
 
-                # Correct a slight rounding error if necessary
-                if sum(pi) != 1:
-                    # print("CORRECTING ERROR")
-                    # print(pi)
-                    mostLikelyIndex = np.argmax(pi)
-                    pi[mostLikelyIndex] += 1 - sum(pi)
+                # Choose action randomly if within tempThreshold
+                if actionsTaken <= self.args.tempThreshold:
+                    # Correct a slight rounding error if necessary
+                    if sum(pi) != 1:
+                        # print("CORRECTING ERROR")
+                        # print(pi)
+                        mostLikelyIndex = np.argmax(pi)
+                        pi[mostLikelyIndex] += 1 - sum(pi)
 
-                action = np.random.choice(len(pi), p=pi)
+                    action = np.random.choice(len(pi), p=pi)
+                else:
+                    # Take best action
+                    action = np.argmax(pi)
+
                 ep.takeAction(action)
                 ep2.takeAction(action)
 
@@ -700,7 +712,15 @@ class Coach:
         return boards, pis, vs
 
     def runEpisodesCpp(self):
-        return runSelfPlayEpisodes(self.nnet.predict_on_batch)
+        return runSelfPlayEpisodes(
+            self.nnet.predict_on_batch,
+            self.args.CPUBatchSize,
+            self.args.numCPUForMCTS,
+            self.args.numMCTSSims,
+            self.args.cpuct,
+            self.args.dir_a,
+            self.args.dir_x,
+        )
 
     def learnIterations(self):
         """
@@ -750,6 +770,10 @@ class Coach:
             self.nnet.save_checkpoint(folder="./temp", filename="temp.ckpt")
 
             self.nnet.train(inputs, pis, vs)
+
+            # self.log.info("Starting NN train #2")
+            #
+            # self.nnet.train(inputs, pis, vs)
 
             new_weights = self.nnet.get_weights()
 

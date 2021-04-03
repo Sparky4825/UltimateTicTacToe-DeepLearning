@@ -25,23 +25,25 @@ args = dotdict(
     {
         "numIters": 10,
         "numEps": 350,  # Number of complete self-play games to simulate during a new iteration.
-        "tempThreshold": 15,  #
+        "tempThreshold": 16,  #
         "arenaTempThreshold": 5,  #
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 300000,  # Number of game examples to train the neural networks.
         "numMCTSSims": 800,  # Number of games moves for MCTS to simulate.
-        "arenaCompare": 100,  # Number of games to play during arena play to determine if new net will be accepted.
-        "cpuct": 1,
+        "arenaCompare": 200,  # Number of games to play during arena play to determine if new net will be accepted.
+        "cpuct": 4,
         "checkpoint": "./temp/",
         # 'load_model': False,
         # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
-        "load_model": True,
+        "load_model": False,
         "load_folder_file": ("./temp/", "best.ckpt"),
         "numItersForTrainExamplesHistory": 4,
         "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 256,
         "GPUBatchSize": 1,
-        "skipFirstSelfPlay": False,
+        "skipFirstSelfPlay": True,
+        "dir_a": 0.8,
+        "dir_x": 0.5,
     }
 )
 
@@ -117,7 +119,6 @@ def tflite_test():
 
 
 def model_illustrate():
-    ray.init()
 
     g = UTicTacToe.TicTacToeGame()
 
@@ -182,7 +183,7 @@ def train_only():
 
 
 def main():
-    ray.init()
+    # ray.init()
 
     log.info("Loading %s...", UTicTacToe.TicTacToeGame.__name__)
     g = UTicTacToe.TicTacToeGame()
@@ -219,4 +220,4 @@ def mctsCPPTest():
 
 
 if __name__ == "__main__":
-    train_only()
+    main()

@@ -49,7 +49,7 @@ cdef extern from "include/MonteCarlo.h":
 
     cdef cppclass MCTS:
         MCTS()
-        MCTS(float _cpuct)
+        MCTS(float _cpuct, double dirichlet_a)
 
         void startNewSearch(GameState position)
         void backpropagate(Node *finalNode, float result)
@@ -80,7 +80,7 @@ cdef extern from "include/BatchManager.h":
 
     cdef cppclass BatchManager:
         BatchManager()
-        BatchManager(int _batchSize, float _cpuct, int _numSims)
+        BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x)
 
         int batchSize, numSims, numThreads
         float cpuct
@@ -95,5 +95,14 @@ cdef extern from "include/BatchManager.h":
 
         int getOngoingGames()
 
+        vector[trainingExampleVector] getTrainingExamples(int pastIterations)
         vector[trainingExampleVector] getTrainingExamples()
 
+        void purgeHistory(int iterationsToSave)
+
+        void saveTrainingExampleHistory()
+
+
+    cdef void saveTrainingDataToFile(string filename)
+    cdef void loadTrainingDataFromFile(string filename)
+    

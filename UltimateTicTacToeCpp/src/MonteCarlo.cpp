@@ -41,11 +41,16 @@ int piSymmetriesMapping[8][81] = {
 
 
 MCTS::MCTS() {
-    cpuct = 1;
+    gen = mt19937(rd());
+    dirichlet = dirichlet_distribution<mt19937>(dirichlet_a, 81);
 }
 
-MCTS::MCTS(float _cpuct) {
+MCTS::MCTS(float _cpuct, double _dirichlet) {
     cpuct = _cpuct;
+    dirichlet_a = _dirichlet;
+
+    gen = mt19937(rd());
+    dirichlet = dirichlet_distribution<mt19937>(dirichlet_a, 81);
 }
 
 void MCTS::startNewSearch(GameState position) {
@@ -173,16 +178,12 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
 }
 
 vector<float> MCTS::getActionProb() {
-    vector<float> result;
+    vector<float> result(81, 0);
 
     float totalActionValue = 0;
     int numValidActions = 0;
     int maxActionValue = 0;
     int maxActionIndex = 0;
-
-    for (int i = 0; i < 81; i++) {
-        result.push_back(0);
-    }
     
     for (Node &action : rootNode.children) {
         int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
@@ -558,3 +559,7 @@ trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector 
     return ex;
 }
 
+vector<double> MCTS::dir(double a, int dim) {
+    dirichlet.set_params(a, dim);
+    return dirichlet(gen);
+}

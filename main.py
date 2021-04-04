@@ -36,13 +36,13 @@ args = dotdict(
         "checkpoint": "./temp/",
         # 'load_model': False,
         # 'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
-        "load_model": True,
+        "load_model": False,
         "load_folder_file": ("./temp/", "best.ckpt"),
         "numItersForTrainExamplesHistory": 4,
         "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 256,
         "GPUBatchSize": 1,
-        "skipFirstSelfPlay": True,
+        "skipFirstSelfPlay": False,
         "dir_a": 0.8,
         "dir_x": 0.5,
     }
@@ -221,4 +221,4 @@ def mctsCPPTest():
 
 
 if __name__ == "__main__":
-    model_illustrate()
+    main()

@@ -8,13 +8,15 @@ using namespace std;
 #include <random>
 #include <fstream>
 
-#define CPUCT_DEFAULT           4
+#define CPUCT_DEFAULT               4
 
-#define MAX_THREADS             4
-#define BATCH_SIZE_DEFAULT      300
-#define SIMS_DEFAULT            800
-#define DIRICHLET_DEFAULT_A       0.8
-#define DIRICHLET_DEFAULT_X       0.5
+#define MAX_THREADS                 4
+#define BATCH_SIZE_DEFAULT          300
+#define SIMS_DEFAULT                800
+#define DIRICHLET_DEFAULT_A         0.8
+#define DIRICHLET_DEFAULT_X         0.5
+#define PERCENT_Q_IN_TRAINING       0.5
+
 
 struct batch {
     bool batchRetrieved = true;
@@ -31,12 +33,13 @@ private:
 
 public:
     BatchManager();
-    BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x);
+    BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x, float _percent_q);
 
     int batchSize = BATCH_SIZE_DEFAULT, numSims = SIMS_DEFAULT;
     float cpuct = CPUCT_DEFAULT;
     int numThreads = MAX_THREADS;
     double dirichlet_a = DIRICHLET_DEFAULT_A;
+    float percent_q = PERCENT_Q_IN_TRAINING;
 
     // Higher values favor the original value more
     double dirichlet_x = DIRICHLET_DEFAULT_X;

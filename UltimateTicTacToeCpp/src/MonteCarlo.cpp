@@ -45,9 +45,10 @@ MCTS::MCTS() {
     dirichlet = dirichlet_distribution<mt19937>(dirichlet_a, 81);
 }
 
-MCTS::MCTS(float _cpuct, double _dirichlet) {
+MCTS::MCTS(float _cpuct, double _dirichlet, float _percent_q) {
     cpuct = _cpuct;
     dirichlet_a = _dirichlet;
+    percent_q = _percent_q;
 
     gen = mt19937(rd());
     dirichlet = dirichlet_distribution<mt19937>(dirichlet_a, 81);
@@ -61,7 +62,7 @@ void MCTS::startNewSearch(GameState position) {
 void MCTS::backpropagate(Node *finalNode, float result) {
     currentNode = finalNode->parent;
 
-    while (currentNode->parent != NULL) {
+    while (currentNode != NULL) {
         if (currentNode->board.getToMove() == 1) {
             currentNode->w += result;
         }
@@ -238,7 +239,7 @@ string MCTS::gameToString() {
     return rootNode.board.gameToString();
 }
 
-void MCTS::saveTrainingExample(vector<float> pi) {
+void MCTS::saveTrainingExample(vector<float> pi, float q) {
     /**
      * Saves the position in the root node to the list of training examples.
      */
@@ -250,6 +251,9 @@ void MCTS::saveTrainingExample(vector<float> pi) {
     for (int i = 0; i < 81; i++) {
         newPosition.pi[i] = pi[i];
     }
+
+
+    newPosition.q = q;
 
     // Save which player is to move; This will later be multiplied by the result of the game
     // to get the result for the current player
@@ -266,6 +270,9 @@ vector<trainingExample> MCTS::getTrainingExamples(int result) {
     // Update the result across all positions
     for (int i = 0; i < trainingPositions.size(); i++) {
         trainingPositions[i].result *= result;
+
+        // Balance Q and the result
+        trainingPositions[i].result = trainingPositions[i].q * percent_q + trainingPositions[i].result * (1 - percent_q);
     }
 
     return trainingPositions;
@@ -274,6 +281,10 @@ vector<trainingExample> MCTS::getTrainingExamples(int result) {
 vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
     for (int i = 0; i < trainingPositions.size(); i++) {
         trainingPositions[i].result *= result;
+
+        // Balance Q and the result
+        trainingPositions[i].result = trainingPositions[i].q * percent_q + trainingPositions[i].result * (1 - percent_q);
+
     }
 
     vector<trainingExampleVector> examplesVector;

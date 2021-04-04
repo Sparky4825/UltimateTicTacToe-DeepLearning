@@ -174,9 +174,9 @@ else:
     pass
 
 model2 = ["temp", "best.ckpt"]
-# model1 = ["temp", "At Work (3 accepted)\\best.ckpt"]
+model1 = ["temp", "At Work (3 accepted)\\best.ckpt"]
 
-model1 = None
+# model1 = None
 if __name__ == "__main__":
     log = logging.getLogger(__name__)
     log.info("Loading %s...", TicTacToeGame.__name__)

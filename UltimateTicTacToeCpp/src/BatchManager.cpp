@@ -66,12 +66,13 @@ int RandomActionWeighted(vector<float> weights) {
 BatchManager::BatchManager() {
 }
 
-BatchManager::BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x) {
+BatchManager::BatchManager(int _batchSize, int _numThreads, float _cpuct, int _numSims, double _dirichlet_a, float _dirichlet_x, float _percent_q) {
     batchSize = _batchSize;
     cpuct = _cpuct;
     numSims = _numSims;
     dirichlet_a = _dirichlet_a;
     dirichlet_x = _dirichlet_x;
+    percent_q = _percent_q;
     if (_numThreads > 0 && _numThreads <= MAX_THREADS) {
         numThreads = _numThreads;
     }
@@ -100,7 +101,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
     // Start all of the episodes
     for (int i = 0; i < parent->batchSize; i++) {
-        episodes.push_back(MCTS(parent->cpuct, parent->dirichlet_a));
+        episodes.push_back(MCTS(parent->cpuct, parent->dirichlet_a, parent->percent_q));
 
     }
 
@@ -215,7 +216,8 @@ void mctsWorker(int workerID, BatchManager *parent) {
             vector<float> probs = ep.getActionProb();
 
             // Save probability before adding noise
-            ep.saveTrainingExample(probs);
+
+            ep.saveTrainingExample(probs, ep.rootNode.w / ep.rootNode.n);
 
             // Add dirichlet noise
             int numActions = ep.rootNode.children.size();

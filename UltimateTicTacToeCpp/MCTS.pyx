@@ -56,8 +56,8 @@ cdef class PyGameState:
 
 cdef class PyMCTS:
     cdef MCTS mcts
-    def __cinit__(self, cpuct, dirichlet=1):
-        self.mcts = MCTS(cpuct, dirichlet)
+    def __cinit__(self, cpuct, dirichlet=1, percent_q=0.5):
+        self.mcts = MCTS(cpuct, dirichlet, percent_q)
 
     def startNewSearch(self, PyGameState position):
         self.mcts.startNewSearch(position.c_gamestate)
@@ -87,8 +87,8 @@ cdef class PyMCTS:
     def gameToString(self):
         return self.mcts.gameToString().decode('UTF-8')
 
-    def saveTrainingExample(self, vector[float] policy):
-        self.mcts.saveTrainingExample(policy)
+    def saveTrainingExample(self, vector[float] policy, float q):
+        self.mcts.saveTrainingExample(policy, q)
 
     def purgeTrainingExamples(self):
         self.mcts.purgeTrainingExamples()
@@ -117,8 +117,8 @@ cdef class PyMCTS:
         return inputs, targetPi, targetV
 
 
-def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=850, int pastIterations=2, float cpuct=1, double dir_a=0.8, double dir_x=0.5):
-    cdef BatchManager m = BatchManager(batchSize, numThreads, cpuct, sims, dir_a, dir_x)
+def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=850, int pastIterations=2, float cpuct=1, double dir_a=0.8, double dir_x=0.5, float percent_q=0.5):
+    cdef BatchManager m = BatchManager(batchSize, numThreads, cpuct, sims, dir_a, dir_x, percent_q)
 
     print("Starting search...")
 

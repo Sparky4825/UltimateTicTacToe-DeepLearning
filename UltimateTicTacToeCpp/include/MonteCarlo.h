@@ -12,13 +12,15 @@ using namespace std;
 
 struct trainingExample {
     bitset<199> canonicalBoard;
-    int result;
+    float result;
     float pi[81];
+    float q;
 };
 
 struct trainingExampleVector {
     vector<int> canonicalBoard;
     float result;
+    float q;
     vector<float> pi;
     int timesSeen = 1;
 
@@ -37,6 +39,7 @@ random_device rd;
 class MCTS {
     float cpuct = 1;
     double dirichlet_a = 0.8;
+    float percent_q = 0.5;
 
     vector<trainingExample> trainingPositions;
 
@@ -49,7 +52,7 @@ class MCTS {
 
 
         MCTS();
-        MCTS(float _cupct, double _dirichlet);
+        MCTS(float _cupct, double _dirichlet, float _percent_q);
 
         bool gameOver = false;
 
@@ -69,7 +72,7 @@ class MCTS {
         void displayGame();
         string gameToString();
 
-        void saveTrainingExample(vector<float> pi);
+        void saveTrainingExample(vector<float> pi, float q);
         vector<trainingExample> getTrainingExamples(int result);
         vector<trainingExampleVector> getTrainingExamplesVector(int result);
         void purgeTrainingExamples();

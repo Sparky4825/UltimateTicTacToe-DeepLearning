@@ -717,6 +717,7 @@ class Coach:
             self.args.CPUBatchSize,
             self.args.numCPUForMCTS,
             self.args.numMCTSSims,
+            self.args.pastTrainingIterations,
             self.args.cpuct,
             self.args.dir_a,
             self.args.dir_x,
@@ -763,6 +764,12 @@ class Coach:
             np.random.set_state(rng_state)
 
             np.random.shuffle(vs)
+
+            if self.args.maxlenOfQueue < len(inputs):
+                inputs = inputs[: self.args.maxlenOfQueue]
+                pis = pis[: self.args.maxlenOfQueue]
+                vs = vs[: self.args.maxlenOfQueue]
+                self.log.info(f"Only training with {self.args.maxlenOfQueue} samples")
 
             # training new network, keeping a copy of the old one
             previous_weights = self.nnet.get_weights()

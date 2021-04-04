@@ -21,7 +21,9 @@ from main import args
 from UltimateTicTacToe.keras.NNet import NNetWrapper as nn
 
 
+from MCTS import PyMCTS, PyGameState, prepareBatch, batchResults
 import tensorflow as tf
+import time
 
 """
 use this script to play any two agents against each other, or play manually with
@@ -53,6 +55,113 @@ hp = HumanTicTacToePlayer(g).play
 modelPath = "litemodels/20210326-092010.tflite"
 
 
+def vsHuman(args, nnet, weights):
+    """
+    Returns in format (player1Wins, player2Wins, draws)
+    :param player1Weights:
+    :param player2Weights:
+    :return:
+    """
+    p1Episodes = []
+    p2Episodes = []
+    results = []
+    # Start all episodes
+    for i in range(1):
+        p1Episodes.append(PyMCTS(args.cpuct))
+        g = PyGameState()
+        p1Episodes[-1].startNewSearch(g)
+
+        p2Episodes.append(PyMCTS(args.cpuct))
+        g = PyGameState()
+        p2Episodes[-1].startNewSearch(g)
+
+    actionsTaken = 0
+
+    # Loop until all episodes are complete
+    while len(p1Episodes) > 0:
+        overallStart = time.time()
+
+        nnet.set_weights(weights)
+        for _ in range(2000):
+            # print("Stargin simulation")
+            needsEval = prepareBatch(p1Episodes)
+
+            pi, v = nnet.predict_on_batch(needsEval)
+            batchResults(p1Episodes, pi, v)
+        index = -1
+
+        actionsTaken += 1
+        print(f"Taking action {actionsTaken}")
+
+        for ep in p1Episodes:
+            index += 1
+            ep2 = p2Episodes[index]
+
+            pi = np.array(ep.getActionProb())
+            pi /= sum(pi)
+
+            # Choose action randomly if within tempThreshold
+            if actionsTaken <= args.tempThreshold:
+                # Correct a slight rounding error if necessary
+                if sum(pi) != 1:
+                    # print("CORRECTING ERROR")
+                    # print(pi)
+                    mostLikelyIndex = np.argmax(pi)
+                    pi[mostLikelyIndex] += 1 - sum(pi)
+
+                action = np.random.choice(len(pi), p=pi)
+            else:
+                # Take best action
+                action = np.argmax(pi)
+
+            ep.takeAction(action)
+
+            status = ep.getStatus()
+            # Remove episode and save results when the game is over
+            if status != 0:
+                print(f"Game over - {len(p1Episodes) - 1} remaining")
+                if status == 1:
+                    results.append(1)
+                elif status == 2:
+                    results.append(-1)
+                else:
+                    results.append(0)
+                p1Episodes.remove(ep)
+                p2Episodes.remove(p2Episodes[index])
+
+        if len(p1Episodes) == 0:
+            break
+
+        ep = p1Episodes[0]
+
+        # GET USER MOVE
+        print(ep.gameToString())
+        board = int(input("Board >> "))
+        piece = int(input("Piece >> "))
+
+        action = board * 9 + piece
+        # MAKE USER MOVE
+
+        ep.takeAction(action)
+
+        print(ep.gameToString())
+
+        status = ep.getStatus()
+        # Remove episode and save results when the game is over
+        if status != 0:
+            print(f"Game over - {len(p1Episodes) - 1} remaining")
+            if status == 1:
+                results.append(1)
+            elif status == 2:
+                results.append(-1)
+            else:
+                results.append(0)
+            p2Episodes.remove(ep)
+            p1Episodes.remove(p1Episodes[index])
+
+    return results.count(1), results.count(-1), results.count(0)
+
+
 with open(modelPath, "rb") as f:
     modelContent = f.read()
 
@@ -64,6 +173,10 @@ if human_vs_cpu:
 else:
     pass
 
+model2 = ["temp", "best.ckpt"]
+# model1 = ["temp", "At Work (3 accepted)\\best.ckpt"]
+
+model1 = None
 if __name__ == "__main__":
     log = logging.getLogger(__name__)
     log.info("Loading %s...", TicTacToeGame.__name__)
@@ -72,15 +185,23 @@ if __name__ == "__main__":
     log.info("Loading Neural Network (Ray actor)...")
     nnet = nn(g)
 
-    previous_weights = nnet.get_weights()
-
-    if True:
+    if model1 is not None:
         log.info(
             'Loading checkpoint "%s/%s"...',
-            "./temp/",
-            "best.ckpt",
+            model1[0],
+            model1[1],
         )
-        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
+        nnet.load_checkpoint(model1[0], model1[1])
+
+    previous_weights = nnet.get_weights()
+
+    if model2 is not None:
+        log.info(
+            'Loading checkpoint "%s/%s"...',
+            model2[0],
+            model2[1],
+        )
+        nnet.load_checkpoint(model2[0], model2[1])
 
     new_weights = nnet.get_weights()
 

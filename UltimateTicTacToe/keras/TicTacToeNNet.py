@@ -110,7 +110,9 @@ def get_model(game, args):
 
     conv1 = Activation("relu")(
         BatchNormalization(axis=2)(
-            Conv1D(num_filters, 22, 22, "valid", "channels_last")(crop)
+            Conv1D(
+                num_filters, 22, 22, "valid", "channels_last", kernel_regularizer="l2"
+            )(crop)
         )
     )
 

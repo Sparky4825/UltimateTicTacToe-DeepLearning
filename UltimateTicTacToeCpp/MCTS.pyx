@@ -147,7 +147,8 @@ def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=
             batchesEvaled += 1;
 
             if batchesEvaled % 1000 == 0:
-                print(f"{batchesEvaled} batches evaluated / f{3 * 750 * 50}")
+                # 81 is max possible number of game moves
+                print(f"{batchesEvaled} batches evaluated / {numThreads * sims * 81}")
 
             start = m.getBatch()
 

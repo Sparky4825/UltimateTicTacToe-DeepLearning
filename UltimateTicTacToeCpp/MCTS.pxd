@@ -21,7 +21,7 @@ cdef extern from "include/GameState.h":
         int board, piece
 
     cdef struct board2D:
-        int board[99][2]
+        vector[vector[int]] board
 
     cdef cppclass GameState:
         GameState() except +

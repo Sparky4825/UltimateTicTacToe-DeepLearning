@@ -157,8 +157,11 @@ def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=
 
 
             # boards = np.asarray(<np.int[:start.canonicalBoards.size(), 199:]> &(start.canonicalBoards))
-
+            t1 = time.time()
             boards = boardToNp(start)
+            t2 = time.time()
+
+            print(f"Board to np took {t2 - t1} seconds")
 
             # TODO: Convert batch to numpy array
             pi, v = evaluate(boards)
@@ -191,7 +194,7 @@ def prepareBatch(trees):
     cdef int [:, :, :] boardsView = boards
 
     cdef Node *evalNode 
-    cdef int i
+    cdef int i, j
     cdef board2D canBoard
 
     cdef PyMCTS pymcts
@@ -202,7 +205,10 @@ def prepareBatch(trees):
         canBoard = pymcts.mcts.searchPreNN()
 
         if pymcts.evaluationNeeded:
-            boardsView[i] = canBoard.board
+            for j in range(99):
+
+                boardsView[i][j][0] = canBoard.board[j][0]
+                boardsView[i][j][1] = canBoard.board[j][1]
 
     return boards
 
@@ -229,7 +235,9 @@ cdef np.ndarray boardToNp(batch b):
     cdef int [:, :, :] resultView = result
 
     for i in range(b.canonicalBoards.size()):
-        resultView[i] = b.canonicalBoards[i].board
+        for j in range(99):
+            resultView[i][j][0] = b.canonicalBoards[i].board[j][0]
+            resultView[i][j][1] = b.canonicalBoards[i].board[j][1]
 
     return result
 

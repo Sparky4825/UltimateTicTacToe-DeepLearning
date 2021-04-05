@@ -32,7 +32,7 @@ struct boardCoords {
 };
 
 struct board2D {
-    int board[99][2] = {};
+    vector<vector<int>> board = vector<vector<int>>(99, vector<int>(2));
 };
 
 int checkMiniboardResultsWithTie(bitset<20> miniboard);

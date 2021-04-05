@@ -30,7 +30,7 @@ args = dotdict(
         "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 1000000,  # Number of game examples to train the neural networks.
         "pastTrainingIterations": 2,
-        "numMCTSSims": 800,  # Number of games moves for MCTS to simulate.
+        "numMCTSSims": 100,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 200,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 4,
         "checkpoint": "./temp/",
@@ -39,12 +39,13 @@ args = dotdict(
         "load_model": False,
         "load_folder_file": ("./temp/", "best.ckpt"),
         "numItersForTrainExamplesHistory": 4,
-        "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
-        "CPUBatchSize": 256,
+        "numCPUForMCTS": 1,  # The number of Ray actors to use to add boards to be predicted.
+        "CPUBatchSize": 20,
         "GPUBatchSize": 1,
         "skipFirstSelfPlay": False,
         "dir_a": 0.8,
         "dir_x": 0.5,
+        "q_percent": 0,
     }
 )
 

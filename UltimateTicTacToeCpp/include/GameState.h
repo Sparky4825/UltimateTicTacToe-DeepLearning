@@ -31,6 +31,10 @@ struct boardCoords {
     int board, piece;
 };
 
+struct board2D {
+    int board[99][2] = {};
+};
+
 int checkMiniboardResultsWithTie(bitset<20> miniboard);
 int checkMiniboardResults(bitset<20> miniboard);
 
@@ -85,8 +89,57 @@ class GameState {
     void displayGame();
     string gameToString();
 
+
+    /**
+     * Gets the current board in the Canonical form for
+     * input to the NN.
+     * 
+     * The board is stored in the form 9 boards of 22 bits.
+     * 
+     * Bits 0-17 store the state of each of the 9 spots. If 
+     * the first bit is set, the player to move has this 
+     * spot, if the second bit is set, the opposing player
+     * has the spot.
+     * 
+     * Bit 18 is set if the player to move has won the board
+     * Bit 19 is set if the opposing player has won the board
+     * Bit 20 is set if the board is tied
+     * 
+     * Bit 21 is set if the player is allowed to move on the
+     * board
+     * 
+     * Bit 199 is unused; it is leftover from saving toMove
+     * on a full board.
+     * 
+     * Board is then converted to a vector<int> for output
+     */
     vector<int> getCanonicalBoard();
+
+
     vector<int> getBoardBitset();
+
+    /**
+     * Gets the current board in a canonical form with
+     * two channels, one for each player. This is for
+     * training the neural network and allowing it to
+     * use the same filters for both players.
+     * 
+     * Returns a shape of (99, 2)
+     * 
+     * Each of the 9 boards are made up of 11 bits.
+     * 
+     * Bits 0-8 are set if the player has the spot.
+     * Bit 9 is set if the player is allowed to move on the
+     * board.
+     * Bit 10 is set if the board is tied or the opposing player has won
+     * 
+     * (Bit 10 represents 'this board can never be won')
+     * 
+     * All spot bits will be set on boards that are won.
+     * No spot bits will be set on boards that are lost.
+     * No spot bits will be set on boards that are tied.
+     */
+    board2D get2DCanonicalBoard();
 
     bitset<199> getCanonicalBoardBitset();
     

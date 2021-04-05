@@ -99,20 +99,19 @@ def get_model(game, args):
     args = args
 
     # Neural Net
-    input_boards = Input(shape=(199))  # s: batch_size x board_x x board_y
-
-    reshape = Reshape((199, 1))(input_boards)
+    input_boards = Input(shape=(99, 2))  # s: batch_size x board_x x board_y
 
     # First pass though 2 layers with only one node per spot (plus 1 for won boards)
-
-    # Take out the last bit that is only used to denote game winners
-    crop = Cropping1D(cropping=(0, 1))(reshape)
 
     conv1 = Activation("relu")(
         BatchNormalization(axis=2)(
             Conv1D(
-                num_filters, 22, 22, "valid", "channels_last", kernel_regularizer="l2"
-            )(crop)
+                num_filters,
+                11,
+                11,
+                "valid",
+                "channels_last",
+            )(input_boards)
         )
     )
 
@@ -161,7 +160,7 @@ def get_model(game, args):
     model = Model(inputs=input_boards, outputs=[pi, v])
     model.compile(
         loss=["categorical_crossentropy", "mean_squared_error"],
-        loss_weights=[0.45, 0.65],
+        loss_weights=[0.5, 0.5],
         optimizer=Adam(args.lr),
         metrics=["accuracy"],
     )

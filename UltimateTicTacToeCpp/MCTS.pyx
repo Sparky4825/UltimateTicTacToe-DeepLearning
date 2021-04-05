@@ -177,7 +177,7 @@ def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=
     m.saveTrainingExampleHistory()
     allTrainingExamples = m.getTrainingExamples(pastIterations)
 
-    return c_compileExamples(allTrainingExamples)
+    return c_compileExamples2D(allTrainingExamples)
   
 
 def prepareBatch(trees):
@@ -186,13 +186,13 @@ def prepareBatch(trees):
     evaluated by the NN.
     """
 
-    boards = np.zeros((len(trees), 199), dtype="int")
+    boards = np.zeros((len(trees), 99, 2), dtype="int")
 
-    cdef int [:, :] boardsView = boards
+    cdef int [:, :, :] boardsView = boards
 
     cdef Node *evalNode 
     cdef int i
-    cdef vector[int] canBoard
+    cdef board2D canBoard
 
     cdef PyMCTS pymcts
 
@@ -202,8 +202,7 @@ def prepareBatch(trees):
         canBoard = pymcts.mcts.searchPreNN()
 
         if pymcts.evaluationNeeded:
-            for j in range(canBoard.size()):
-                boardsView[i][j] = canBoard[j]
+            boardsView[i] = canBoard.board
 
     return boards
 
@@ -225,15 +224,15 @@ def batchResults(trees, pi, v):
 cdef np.ndarray boardToNp(batch b):
     cdef int i, j
 
-    result = np.ndarray((b.canonicalBoards.size(), 199), dtype=np.int)
+    result = np.ndarray((b.canonicalBoards.size(), 99, 2), dtype=np.int)
 
-    cdef int [:, :] resultView = result
+    cdef int [:, :, :] resultView = result
 
     for i in range(b.canonicalBoards.size()):
-        for j in range(199):
-            resultView[i][j] = b.canonicalBoards[i][j]
+        resultView[i] = b.canonicalBoards[i].board
 
     return result
+
 
 cdef testByReference(Node *n, int depth):
     cdef Node *startNode = n
@@ -304,4 +303,33 @@ cdef c_compileExamples(vector[trainingExampleVector] trainingExamples):
             pisView[exIndex, j] = trainingExamples[exIndex].pi[j]
         vsView[exIndex] = trainingExamples[exIndex].result
 
+    return boards, pis, vs
+
+cdef c_compileExamples2D(vector[trainingExampleVector] trainingExamples):
+    print("COMPILE EXAMPLES 2D")
+    cdef vector[trainingExample2D] converted
+    print("HERERERER")
+    print(trainingExamples.size())
+    converted = convertTo2D(trainingExamples)
+    print("DONE CONVERTING")
+    cdef int numExs = trainingExamples.size()
+
+    
+    boards = np.ndarray((numExs, 99, 2), dtype=np.int)
+    pis = np.ndarray((numExs, 81), dtype=np.float)
+    vs = np.ndarray((numExs), dtype=np.float)
+
+    cdef int [:, :, :] boardsView = boards
+    cdef double [:, :] pisView = pis
+    cdef double [:] vsView = vs
+
+    cdef int exIndex, i, j
+
+    for exIndex in range(numExs):
+        boardsView[exIndex] = converted[exIndex].canonicalBoard
+
+        for j in range(81):
+            pisView[exIndex, j] = trainingExamples[exIndex].pi[j]
+
+        vsView[exIndex] = trainingExamples[exIndex].result
     return boards, pis, vs

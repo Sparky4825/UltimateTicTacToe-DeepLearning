@@ -60,22 +60,20 @@ void MCTS::startNewSearch(GameState position) {
 }
 
 void MCTS::backpropagate(Node *finalNode, float result) {
-    currentNode = finalNode->parent;
-
     while (currentNode != NULL) {
         if (currentNode->board.getToMove() == 1) {
-            currentNode->w += result;
+            currentNode->w += result * -1;
         }
 
         else {
-            currentNode->w += result * -1;
+            currentNode->w += result;
         }
 
         currentNode = currentNode->parent;
     }
 }
 
-vector<int> MCTS::searchPreNN() {
+board2D MCTS::searchPreNN() {
     // Select a node
     currentNode = &rootNode;
     Node *bestAction;
@@ -88,8 +86,6 @@ vector<int> MCTS::searchPreNN() {
     float u, q, v;
 
     int status, i;
-
-    vector<int> empty;
 
     // Search until an unexplored node is found
     while (currentNode->hasChildren) {
@@ -133,7 +129,7 @@ vector<int> MCTS::searchPreNN() {
             }
 
             evaluationNeeded = false;
-            return empty;
+            return board2D();
         }
 
     }
@@ -142,7 +138,7 @@ vector<int> MCTS::searchPreNN() {
     currentNode->addChildren();
 
     evaluationNeeded = true;
-    return currentNode->board.getCanonicalBoard();
+    return currentNode->board.get2DCanonicalBoard();
 }
 
 void MCTS::searchPostNN(vector<float> policy, float v) {
@@ -272,7 +268,7 @@ vector<trainingExample> MCTS::getTrainingExamples(int result) {
         trainingPositions[i].result *= result;
 
         // Balance Q and the result
-        trainingPositions[i].result = trainingPositions[i].q * percent_q + trainingPositions[i].result * (1 - percent_q);
+        trainingPositions[i].result = trainingPositions[i].q * -1 * percent_q + trainingPositions[i].result * (1 - percent_q);
     }
 
     return trainingPositions;
@@ -283,7 +279,7 @@ vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
         trainingPositions[i].result *= result;
 
         // Balance Q and the result
-        trainingPositions[i].result = trainingPositions[i].q * percent_q + trainingPositions[i].result * (1 - percent_q);
+        trainingPositions[i].result = trainingPositions[i].q * -1 * percent_q + trainingPositions[i].result * (1 - percent_q);
 
     }
 
@@ -573,4 +569,70 @@ trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector 
 vector<double> MCTS::dir(double a, int dim) {
     dirichlet.set_params(a, dim);
     return dirichlet(gen);
+}
+
+vector<trainingExample2D> convertTo2D(vector<trainingExampleVector> positions) {
+
+    vector<trainingExample2D> converted;
+
+    for (trainingExampleVector &ex : positions) {
+        trainingExample2D newEx;
+
+        newEx.timesSeen = ex.timesSeen;
+        newEx.result = ex.result;
+        newEx.q = ex.q;
+        newEx.pi = ex.pi;
+
+        int boardStatus;
+
+        for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+            // If the player is allowed to move on the board
+            if (ex.canonicalBoard[miniboardIndex * 22 + 21] == 1) {
+                newEx.canonicalBoard[miniboardIndex * 11 + 9][0] = 1;
+            }
+            
+            // If the player to move has won the board
+            if (ex.canonicalBoard[miniboardIndex * 22 + 18] == 1) {
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    newEx.canonicalBoard[miniboardIndex * 11 + spotIndex][0] = 1;
+                }
+
+                // The opposing player can never claim this board
+                newEx.canonicalBoard[miniboardIndex * 11 + 10][1] = 1;
+            }
+            
+            // If opposing player has won the board
+            else if (ex.canonicalBoard[miniboardIndex * 22 + 19] == 1) {
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    newEx.canonicalBoard[miniboardIndex * 11 + spotIndex][1] = 1;
+                }
+
+                // The current player can never claim this board
+                newEx.canonicalBoard[miniboardIndex * 11 + 10][0] = 1;
+
+            }
+
+            // If the board is tied
+            else if (ex.canonicalBoard[miniboardIndex * 22 + 20] == 1) {
+
+                newEx.canonicalBoard[miniboardIndex * 11 + 10][0] = 1;
+                newEx.canonicalBoard[miniboardIndex * 11 + 10][1] = 1;
+
+            }
+
+            else {
+                
+                // Copy the mini board position
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    newEx.canonicalBoard[miniboardIndex * 11 + spotIndex][0] = ex.canonicalBoard[miniboardIndex * 22 + spotIndex * 2];
+                    newEx.canonicalBoard[miniboardIndex * 11 + spotIndex][1] = ex.canonicalBoard[miniboardIndex * 22 + spotIndex * 2 + 1];
+                }
+            }
+        }
+
+        converted.push_back(newEx);
+    }
+
+    return converted;
 }

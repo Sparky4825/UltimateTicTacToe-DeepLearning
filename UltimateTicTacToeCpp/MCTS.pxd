@@ -20,6 +20,9 @@ cdef extern from "include/GameState.h":
     cdef struct boardCoords:
         int board, piece
 
+    cdef struct board2D:
+        int board[99][2]
+
     cdef cppclass GameState:
         GameState() except +
         void move(int, int)
@@ -47,6 +50,13 @@ cdef extern from "include/MonteCarlo.h":
         float result
         vector[float] pi
 
+    cdef struct trainingExample2D:
+        int canonicalBoard[99][2]
+        float result
+        float q
+        vector[float] pi
+        int timesSeen
+
     cdef cppclass MCTS:
         MCTS()
         MCTS(float _cpuct, double dirichlet_a, float percent_q)
@@ -54,7 +64,7 @@ cdef extern from "include/MonteCarlo.h":
         void startNewSearch(GameState position)
         void backpropagate(Node *finalNode, float result)
 
-        vector[int] searchPreNN()
+        board2D searchPreNN()
 
         void searchPostNN(vector[float] policy, float v)
 
@@ -70,10 +80,13 @@ cdef extern from "include/MonteCarlo.h":
         vector[trainingExampleVector] getTrainingExamplesVector(int result) except +
         void purgeTrainingExamples()
 
+    vector[trainingExample2D] convertTo2D(vector[trainingExampleVector] positions)
+
+
 cdef extern from "include/BatchManager.h":
     cdef struct batch:
         boolean batchRetrieved
-        vector[vector[int]] canonicalBoards
+        vector[board2D] canonicalBoards
         int workerID
         vector[float] evaluations
         vector[vector[float]] pis

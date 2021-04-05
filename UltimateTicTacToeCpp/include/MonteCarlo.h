@@ -23,14 +23,14 @@ struct trainingExampleVector {
     float q;
     vector<float> pi;
     int timesSeen = 1;
+};
 
-    template<class Archive>
-    void serialize(Archive & ar, const unsigned int version) {
-        ar & canonicalBoard;
-        ar & result;
-        ar & pi;
-        ar & timesSeen;
-    }
+struct trainingExample2D {
+    int canonicalBoard[99][2] = {};
+    float result;
+    float q;
+    vector<float> pi;
+    int timesSeen = 1;
 };
 
 random_device rd;
@@ -61,7 +61,7 @@ class MCTS {
 
         void backpropagate(Node *finalNode, float result);
 
-        vector<int> searchPreNN();
+        board2D searchPreNN();
         void searchPostNN(vector<float> policy, float v);
 
         bool evaluationNeeded;
@@ -85,6 +85,11 @@ vector<vector<int>> getSymmetriesBoard(vector<int> board);
 vector<vector<float>> getSymmetriesPi(vector<float> pi);
 vector<trainingExampleVector> getSymmetries(trainingExampleVector position);
 
+/**
+ * Takes a vector of training positions and converts them 
+ * to their 2D equivalents.
+ */
+vector<trainingExample2D> convertTo2D(vector<trainingExampleVector> positions);
 
 int findCanonicalRotation(vector<int> board);
 

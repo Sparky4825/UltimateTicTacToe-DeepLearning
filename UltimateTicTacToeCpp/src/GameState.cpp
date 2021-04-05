@@ -854,13 +854,15 @@ using namespace std;
                 canonical[miniboardIndex * 22 + 18] = 1;
             }
 
+            
+            else if (boardStatus == 3) {
+                canonical[miniboardIndex * 22 + 20] = 1;
+            }
+
             else if (boardStatus == 2 / toMove) {
                 canonical[miniboardIndex * 22 + 19] = 1;
             }
 
-            else if (boardStatus == 3) {
-                canonical[miniboardIndex * 22 + 20] = 1;
-            }
 
             // Mark if this board is legal to move in
             if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
@@ -934,7 +936,7 @@ using namespace std;
                 canonical[miniboardIndex * 22 + 18] = 1;
             }
 
-            else if (boardStatus == 2 / toMove) {
+            else if (boardStatus == 2 / toMove && boardStatus != 3) {
                 canonical[miniboardIndex * 22 + 19] = 1;
             }
 
@@ -951,6 +953,65 @@ using namespace std;
 
         return canonical;
     }
+
+board2D GameState::get2DCanonicalBoard() {
+    board2D board;
+
+
+    int toMove = getToMove();
+    int requiredBoard = getRequiredBoard();
+    int boardStatus;
+
+    for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+
+        // Mark if the board is legal to move in
+        boardStatus = getBoardStatus(miniboardIndex);
+
+        if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
+            board.board[miniboardIndex * 11 + 9][0] = 1;
+        }
+
+        // Mark if the board is won
+        if (boardStatus == toMove) {
+            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                board.board[miniboardIndex * 11 + spotIndex][0] = 1;
+                board.board[miniboardIndex * 11 + spotIndex][1] = 0;
+            }
+        }
+
+        else if (boardStatus == 3) {
+            board.board[miniboardIndex * 11 + 10][0] = 1;
+            board.board[miniboardIndex * 11 + 10][1] = 1;
+        }
+
+        else if (boardStatus == 2 / toMove) {
+            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                board.board[miniboardIndex * 11 + spotIndex][1] = 1;
+                board.board[miniboardIndex * 11 + spotIndex][0] = 0;
+            }
+        }
+
+
+        else if (boardStatus == 0) {
+
+            // Mark every spot
+            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                int spotStatus = getPosition(miniboardIndex, spotIndex);
+
+                if (spotStatus == toMove) {
+                    board.board[miniboardIndex * 11 + spotIndex][0] = 1;
+                }
+
+                else if (spotStatus == 2 / toMove) {
+                    board.board[miniboardIndex * 11 + spotIndex][1] = 1;
+                }
+            }
+        }
+    }
+
+    return board;
+}
 
 
 GameState boardVector2GameState(vector<int> board) {

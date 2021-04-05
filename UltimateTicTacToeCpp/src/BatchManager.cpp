@@ -63,6 +63,24 @@ int RandomActionWeighted(vector<float> weights) {
 
 }
 
+int MaxAction(vector<float> probs) {
+    int action;
+    float bestProbs = -1;
+
+    int index = 0;
+
+    for (float f : probs) {
+        if (f > bestProbs) {
+            action = index;
+            bestProbs = f;
+        }
+
+        index++;
+    }
+
+    return action;
+}
+
 BatchManager::BatchManager() {
 }
 
@@ -133,7 +151,7 @@ void mctsWorker(int workerID, BatchManager *parent) {
                     continue;
                 }
                 // TODO: Reduce copying that is performed here
-                vector<int> newEval = ep.searchPreNN();
+                board2D newEval = ep.searchPreNN();
 
                 if (ep.evaluationNeeded) {
                     needsEval.canonicalBoards.push_back(newEval);
@@ -208,6 +226,8 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
         }
 
+        actionsTaken++;
+
         // Make moves
         for (MCTS &ep : episodes) {
             if (ep.gameOver) {
@@ -219,18 +239,25 @@ void mctsWorker(int workerID, BatchManager *parent) {
 
             ep.saveTrainingExample(probs, ep.rootNode.w / ep.rootNode.n);
 
-            // Add dirichlet noise
-            int numActions = ep.rootNode.children.size();
-            vector<double> dir = ep.dir(parent->dirichlet_a, numActions);
-            int i = 0;
-            for (float &prob : probs) {
-                if (prob != 0) {
-                    prob = parent->dirichlet_x * prob + (1 - parent->dirichlet_x) * dir[i];
-                    i++;
+            int action;
+
+            if (actionsTaken < TEMP_THRESHOLD) {
+                // Add dirichlet noise
+                int numActions = ep.rootNode.children.size();
+                vector<double> dir = ep.dir(parent->dirichlet_a, numActions);
+                int i = 0;
+                for (float &prob : probs) {
+                    if (prob != 0) {
+                        prob = parent->dirichlet_x * prob + (1 - parent->dirichlet_x) * dir[i];
+                        i++;
+                    }
                 }
+        
+                action = RandomActionWeighted(probs);
+            } else {
+                action = MaxAction(probs);
             }
-    
-            int action = RandomActionWeighted(probs);
+
             ep.takeAction(action);
             
 

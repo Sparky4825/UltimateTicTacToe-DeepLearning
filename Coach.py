@@ -721,6 +721,7 @@ class Coach:
             self.args.cpuct,
             self.args.dir_a,
             self.args.dir_x,
+            self.args.q_percent,
         )
 
     def learnIterations(self):

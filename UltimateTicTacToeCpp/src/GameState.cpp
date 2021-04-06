@@ -901,6 +901,11 @@ using namespace std;
          * Bit 199 is unused; it is leftover from saving toMove
          * on a full board.
          * 
+         * If a player has won a miniboard, all of the bits
+         * corresponding to spots on that miniboard will be set
+         * for that player, and none of the spots for the
+         * opponent.
+         * 
          * Board is then converted to a vector<int> for output
          */
         bitset<199> canonical;
@@ -910,29 +915,17 @@ using namespace std;
 
         for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
 
-            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
-
-                int spotStatus = getPosition(miniboardIndex, spotIndex);
-                
-
-                if (spotStatus == toMove) {
-                    canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
-                }
-
-                // If the spot belongs to the other player
-                else if (spotStatus == 2 / toMove) {
-                    canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
-                }
-
-                // Else neither owns it, zero is default
-
-            }
 
             int boardStatus = getBoardStatus(miniboardIndex);
 
             // Mark if the board is won/lost/tied
             if (boardStatus == toMove) {
                 canonical[miniboardIndex * 22 + 18] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
             }
 
             else if (boardStatus == 3) {
@@ -941,6 +934,34 @@ using namespace std;
 
             else if (boardStatus == 2 / toMove) {
                 canonical[miniboardIndex * 22 + 19] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+            }
+
+            else {
+                // Mark the spots
+
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                    int spotStatus = getPosition(miniboardIndex, spotIndex);
+                    
+
+                    if (spotStatus == toMove) {
+                        canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
+                    }
+
+                    // If the spot belongs to the other player
+                    else if (spotStatus == 2 / toMove) {
+                        canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                    }
+
+                    // Else neither owns it, zero is default
+
+                }
+
             }
 
 

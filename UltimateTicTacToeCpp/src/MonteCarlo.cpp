@@ -80,7 +80,7 @@ vector<int> MCTS::searchPreNN() {
     Node *bestAction;
     Node *child;
 
-    currentNode->addChildren();
+    // currentNode->addChildren();
     currentNode->n++;
 
     float bestUCB = -1 * numeric_limits<float>::max();
@@ -174,7 +174,14 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
         }
     }
 
-    backpropagate(currentNode, -1 * v);
+    if (currentNode->board.getToMove() == 1) {
+
+        backpropagate(currentNode, -v);
+    }
+    else {
+
+        backpropagate(currentNode, v);
+    }
 }
 
 vector<float> MCTS::getActionProb() {
@@ -251,8 +258,9 @@ void MCTS::saveTrainingExample(vector<float> pi, float q) {
         newPosition.pi[i] = pi[i];
     }
 
-
-    newPosition.q = q;
+    // Negative because Q values are stored from the perspective of taking the action from
+    // the parents perspective. (ie the value to the current player is the opposite)
+    newPosition.q = -q;
 
     // Save which player is to move; This will later be multiplied by the result of the game
     // to get the result for the current player

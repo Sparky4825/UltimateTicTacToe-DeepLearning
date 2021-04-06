@@ -495,6 +495,8 @@ class Coach:
         :param player2Weights:
         :return:
         """
+        from display import display
+
         p1Episodes = []
         p2Episodes = []
         results = []
@@ -550,8 +552,6 @@ class Coach:
                 ep.takeAction(action)
                 ep2.takeAction(action)
 
-                print(ep.gameToString())
-                print(pi)
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:

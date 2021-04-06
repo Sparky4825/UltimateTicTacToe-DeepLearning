@@ -88,6 +88,8 @@ class GameState {
     vector<int> getCanonicalBoard();
     vector<int> getBoardBitset();
 
+    vector<int> getAllPossibleMovesVector();
+
     bitset<199> getCanonicalBoardBitset();
     
 };

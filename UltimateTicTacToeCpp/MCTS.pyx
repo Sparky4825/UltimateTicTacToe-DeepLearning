@@ -159,9 +159,10 @@ def runSelfPlayEpisodes(evaluate, int batchSize=512, int numThreads=1, int sims=
             # boards = np.asarray(<np.int[:start.canonicalBoards.size(), 199:]> &(start.canonicalBoards))
 
             boards = boardToNp(start)
+            validMoves = validToNp(start)
 
             # TODO: Convert batch to numpy array
-            pi, v = evaluate(boards)
+            pi, v = evaluate((boards, validMoves))
 
 
             for i in range(start.canonicalBoards.size()):
@@ -187,12 +188,14 @@ def prepareBatch(trees):
     """
 
     boards = np.zeros((len(trees), 199), dtype="int")
+    moves = np.zeros((len(trees), 81), dtype="int")
 
     cdef int [:, :] boardsView = boards
+    cdef int [:, :] movesView = moves
 
     cdef Node *evalNode 
     cdef int i
-    cdef vector[int] canBoard
+    cdef vector[int] canBoard, movesVector
 
     cdef PyMCTS pymcts
 
@@ -202,10 +205,14 @@ def prepareBatch(trees):
         canBoard = pymcts.mcts.searchPreNN()
 
         if pymcts.evaluationNeeded:
+            movesVector = pymcts.mcts.getAllPossibleMovesVector()
             for j in range(canBoard.size()):
                 boardsView[i][j] = canBoard[j]
 
-    return boards
+            for j in range(81):
+                movesView[i][j] = movesVector[j]
+
+    return [boards, moves]
 
 
 def batchResults(trees, pi, v):
@@ -232,6 +239,19 @@ cdef np.ndarray boardToNp(batch b):
     for i in range(b.canonicalBoards.size()):
         for j in range(199):
             resultView[i][j] = b.canonicalBoards[i][j]
+
+    return result
+
+cdef np.ndarray validToNp(batch b):
+    cdef int i, j
+
+    result = np.ndarray((b.validMoves.size(), 81), dtype=np.int)
+
+    cdef int [:, :] resultView = result
+
+    for i in range(b.validMoves.size()):
+        for j in range(81):
+            resultView[i][j] = b.validMoves[i][j]
 
     return result
 
@@ -288,12 +308,15 @@ cdef c_compileExamples(vector[trainingExampleVector] trainingExamples):
     cdef int exIndex, i, j
 
     boards = np.ndarray((numExs, 199), dtype=np.int)
+    valids = np.ndarray((numExs, 81), dtype=np.int)
     pis = np.ndarray((numExs, 81), dtype=np.float)
     vs = np.ndarray((numExs), dtype=np.float)
 
     cdef int [:, :] boardsView = boards
     cdef double [:, :] pisView = pis
     cdef double [:] vsView = vs
+    cdef int [:, :] validsView = valids
+
 
 
     for exIndex in range(numExs):
@@ -302,6 +325,7 @@ cdef c_compileExamples(vector[trainingExampleVector] trainingExamples):
             boardsView[exIndex, j] = trainingExamples[exIndex].canonicalBoard[j]
         for j in range(81):
             pisView[exIndex, j] = trainingExamples[exIndex].pi[j]
+            validsView[exIndex, j] = trainingExamples[exIndex].validMoves[j]
         vsView[exIndex] = trainingExamples[exIndex].result
 
-    return boards, pis, vs
+    return [boards, valids], pis, vs

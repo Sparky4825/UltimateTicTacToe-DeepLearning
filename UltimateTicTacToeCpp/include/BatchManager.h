@@ -25,6 +25,7 @@ struct batch {
     int workerID;
     vector<float> evaluations;
     vector<vector<float>> pis;
+    vector<vector<int>> validMoves;
 };
 
 class BatchManager {

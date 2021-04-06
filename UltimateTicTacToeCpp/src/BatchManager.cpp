@@ -154,8 +154,10 @@ void mctsWorker(int workerID, BatchManager *parent) {
                 // TODO: Reduce copying that is performed here
                 vector<int> newEval = ep.searchPreNN();
 
+
                 if (ep.evaluationNeeded) {
                     needsEval.canonicalBoards.push_back(newEval);
+                    needsEval.validMoves.push_back(ep.currentNode->board.getAllPossibleMovesVector());
                 }
             }
 

@@ -88,6 +88,7 @@ def get_model(game, args):
         Cropping1D,
         Conv1D,
         MaxPool1D,
+        Multiply,
     )
     from keras.optimizers import Adam
 
@@ -100,6 +101,7 @@ def get_model(game, args):
 
     # Neural Net
     input_boards = Input(shape=(199))  # s: batch_size x board_x x board_y
+    valid_moves = Input(shape=81)
 
     reshape = Reshape((199, 1))(input_boards)
 
@@ -153,12 +155,12 @@ def get_model(game, args):
     vlayer1 = Dense(500, activation="relu")(final_dense_layer)
     vlayer2 = Dense(500, activation="relu")(vlayer1)
 
-    pi = Dense(action_size, activation="softmax", name="pi")(
-        pilayer2
-    )  # batch_size x action_size
+    pi = Dense(action_size, activation="relu")(pilayer2)  # batch_size x action_size
+    final_pi = Multiply()([pi, valid_moves])
+    final_pi = Activation("softmax", name="pi")(final_pi)
     v = Dense(1, activation="tanh", name="v")(vlayer2)  # batch_size x 1
 
-    model = Model(inputs=input_boards, outputs=[pi, v])
+    model = Model(inputs=[input_boards, valid_moves], outputs=[final_pi, v])
     model.compile(
         loss=["categorical_crossentropy", "mean_squared_error"],
         loss_weights=[0.45, 0.65],

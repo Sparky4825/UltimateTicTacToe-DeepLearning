@@ -23,14 +23,14 @@ coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 
 args = dotdict(
     {
-        "numIters": 10,
+        "numIters": 20,
         "numEps": 350,  # Number of complete self-play games to simulate during a new iteration.
         "tempThreshold": 16,  #
         "arenaTempThreshold": 5,  #
-        "updateThreshold": 0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
+        "updateThreshold": 0.52,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
         "maxlenOfQueue": 1000000,  # Number of game examples to train the neural networks.
         "pastTrainingIterations": 2,
-        "numMCTSSims": 800,  # Number of games moves for MCTS to simulate.
+        "numMCTSSims": 9,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 200,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 4,
         "checkpoint": "./temp/",
@@ -39,8 +39,8 @@ args = dotdict(
         "load_model": False,
         "load_folder_file": ("./temp/", "best.ckpt"),
         "numItersForTrainExamplesHistory": 4,
-        "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
-        "CPUBatchSize": 256,
+        "numCPUForMCTS": 1,  # The number of Ray actors to use to add boards to be predicted.
+        "CPUBatchSize": 20,
         "GPUBatchSize": 1,
         "skipFirstSelfPlay": True,
         "dir_a": 0.8,

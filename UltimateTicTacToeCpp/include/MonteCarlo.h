@@ -15,6 +15,8 @@ struct trainingExample {
     float result;
     float pi[81];
     float q;
+
+    vector<int> validMoves;
 };
 
 struct trainingExampleVector {
@@ -24,13 +26,7 @@ struct trainingExampleVector {
     vector<float> pi;
     int timesSeen = 1;
 
-    template<class Archive>
-    void serialize(Archive & ar, const unsigned int version) {
-        ar & canonicalBoard;
-        ar & result;
-        ar & pi;
-        ar & timesSeen;
-    }
+    vector<int> validMoves;
 };
 
 random_device rd;
@@ -62,6 +58,7 @@ class MCTS {
         void backpropagate(Node *finalNode, float result);
 
         vector<int> searchPreNN();
+        vector<int> getAllPossibleMovesVector();
         void searchPostNN(vector<float> policy, float v);
 
         bool evaluationNeeded;
@@ -83,6 +80,7 @@ class MCTS {
 
 vector<vector<int>> getSymmetriesBoard(vector<int> board);
 vector<vector<float>> getSymmetriesPi(vector<float> pi);
+vector<vector<int>> getSymmetriesMoves(vector<int> moves);
 vector<trainingExampleVector> getSymmetries(trainingExampleVector position);
 
 

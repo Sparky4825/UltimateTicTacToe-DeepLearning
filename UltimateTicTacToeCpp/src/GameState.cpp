@@ -555,6 +555,50 @@ using namespace std;
 
     }
 
+    vector<int> GameState::getAllPossibleMovesVector() {
+        vector<int> moves(81);
+
+        int requiredBoard = getRequiredBoard();
+
+        // If there is a required board
+        if (requiredBoard > -1) {
+
+            // Check every spot on the required board
+            for (int i = 0; i < 9; i++) {
+                int location = 2 + (i * 2);
+
+                // If the spot is empty, add this as a move
+                if (!board[requiredBoard][location] && !board[requiredBoard][location + 1]) {
+
+                    moves[requiredBoard * 9 + i] = 1;
+
+                }
+            }
+        } else {
+
+            // Loop every board
+            for (int boardIndex = 0; boardIndex < 9; boardIndex++) {
+
+                // If the game is over in this board, no moves are possible on it
+                if (getBoardStatus(boardIndex))
+                    continue;
+
+                for (int i = 0; i < 9; i++) {
+                    int location = 2 + (i * 2);
+
+                    // If the spot are empty, add this as a move
+                    if (!board[boardIndex][location] && !board[boardIndex][location + 1]) {
+                        moves[boardIndex * 9 + i] = 1;
+
+                    }
+                }
+
+            }
+        }
+
+        return moves;
+    }
+
     boardCoords GameState::absoluteIndexToBoardAndPiece(int i) {
         /**
          * Gets the board and piece of an absolute index of the full size 9x9 board.

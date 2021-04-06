@@ -518,7 +518,6 @@ class Coach:
 
             self.nnet.set_weights(player1Weights)
             for _ in range(self.args.numMCTSSims):
-                # print("Stargin simulation")
                 needsEval = prepareBatch(p1Episodes)
 
                 pi, v = self.nnet.predict_on_batch(needsEval)
@@ -570,9 +569,7 @@ class Coach:
 
             self.nnet.set_weights(player2Weights)
             for _ in range(self.args.numMCTSSims):
-                # print("Stargin simulation")
                 needsEval = prepareBatch(p2Episodes)
-
                 pi, v = self.nnet.predict_on_batch(needsEval)
                 batchResults(p2Episodes, pi, v)
             index = -1
@@ -582,7 +579,6 @@ class Coach:
             for ep in p2Episodes:
                 index += 1
                 ep2 = p1Episodes[index]
-
                 pi = np.array(ep.getActionProb())
                 pi /= sum(pi)
 
@@ -757,10 +753,13 @@ class Coach:
 
             # TODO: Reduce the number of draws in training examples because they confuse the network
             # Save the rng_state to shuffle each array the say way
-            assert inputs.shape[0] == pis.shape[0]
-            assert inputs.shape[0] == vs.shape[0]
+            assert inputs[0].shape[0] == pis.shape[0]
+            assert inputs[0].shape[0] == vs.shape[0]
             rng_state = np.random.get_state()
-            np.random.shuffle(inputs)
+            np.random.shuffle(inputs[0])
+            np.random.set_state(rng_state)
+
+            np.random.shuffle(inputs[1])
             np.random.set_state(rng_state)
 
             np.random.shuffle(pis)

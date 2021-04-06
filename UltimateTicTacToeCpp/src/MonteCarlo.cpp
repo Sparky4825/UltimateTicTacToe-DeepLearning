@@ -144,6 +144,15 @@ vector<int> MCTS::searchPreNN() {
     return currentNode->board.getCanonicalBoard();
 }
 
+vector<int> MCTS::getAllPossibleMovesVector() {
+    if (currentNode != NULL) {
+        return currentNode->board.getAllPossibleMovesVector();
+    }
+
+    return vector<int>(81);
+    
+}
+
 void MCTS::searchPostNN(vector<float> policy, float v) {
     int validAction, index, i;
     float totalValidMoves = 0;
@@ -176,11 +185,11 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
 
     if (currentNode->board.getToMove() == 1) {
 
-        backpropagate(currentNode, -v);
+        backpropagate(currentNode, v);
     }
     else {
 
-        backpropagate(currentNode, v);
+        backpropagate(currentNode, -v);
     }
 }
 
@@ -252,6 +261,7 @@ void MCTS::saveTrainingExample(vector<float> pi, float q) {
 
     trainingExample newPosition;
     newPosition.canonicalBoard = rootNode.board.getCanonicalBoardBitset();
+    newPosition.validMoves = rootNode.board.getAllPossibleMovesVector();
 
     // Save the pi values to the new position
     for (int i = 0; i < 81; i++) {
@@ -300,6 +310,8 @@ vector<trainingExampleVector> MCTS::getTrainingExamplesVector(int result) {
         trainingExampleVector newPosition;
         newPosition.result = example.result;
 
+        newPosition.validMoves = example.validMoves;
+
         // Copy the pi and board to the new training example
         for (int i = 0; i < 199; i++) {
             newPosition.canonicalBoard.push_back(example.canonicalBoard[i]);
@@ -328,12 +340,14 @@ vector<trainingExampleVector> getSymmetries(trainingExampleVector position) {
 
     vector<vector<int>> boards = getSymmetriesBoard(position.canonicalBoard);
     vector<vector<float>> pis = getSymmetriesPi(position.pi);
+    vector<vector<int>> moves = getSymmetriesMoves(position.validMoves);
 
     for (int i = 0; i < 8; i++) {
         trainingExampleVector newPosition;
         newPosition.result = position.result;
         newPosition.canonicalBoard = boards[i];
         newPosition.pi = pis[i];
+        newPosition.validMoves = moves[i];
 
         result.push_back(newPosition);
     }
@@ -355,6 +369,22 @@ vector<vector<int>> getSymmetriesBoard(vector<int> board) {
         for (int j = 0; j < 199; j++) {
             
             temp.push_back(board[symmetriesMapping[i][j]]);
+        }
+
+        result.push_back(temp);
+    }
+
+    return result;
+}
+
+vector<vector<int>> getSymmetriesMoves(vector<int> moves) {
+    vector<vector<int>> result;
+
+
+    for (int i = 0; i < 8; i++) {
+        vector<int> temp;
+        for (int j = 0; j < 81; j++) {
+            temp.push_back(moves[piSymmetriesMapping[i][j]]);
         }
 
         result.push_back(temp);
@@ -510,6 +540,7 @@ vector<int> getCanonicalBoardRotation(vector<int> board) {
 trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector ex) {
     vector<vector<int>> rotations = getSymmetriesBoard(ex.canonicalBoard);
     vector<vector<float>> pis = getSymmetriesPi(ex.pi);
+    vector<vector<int>> moves = getSymmetriesMoves(ex.validMoves);
 
     trainingExampleVector result;
     result.result = ex.result;
@@ -542,6 +573,7 @@ trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector 
         if (foundIndex > -1) {
             result.canonicalBoard = rotations[foundIndex];
             result.pi = pis[foundIndex];
+            result.validMoves = moves[foundIndex];
             return result;
         }
 
@@ -568,6 +600,7 @@ trainingExampleVector getCanonicalTrainingExampleRotation(trainingExampleVector 
         if (foundIndex > -1) {
             result.canonicalBoard = rotations[foundIndex];
             result.pi = pis[foundIndex];
+            result.validMoves = moves[foundIndex];
             return result;
         }
     }

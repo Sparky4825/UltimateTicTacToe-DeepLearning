@@ -40,7 +40,7 @@ args = dotdict(
     {
         "lr": 0.001,
         "dropout": 0.3,
-        "epochs": 5,
+        "epochs": 2,
         "batch_size": 2000,
         "cuda": True,
         "num_channels": 512,
@@ -96,11 +96,11 @@ class NNetWrapper(NeuralNet):
         if validation is None:
             validate_size = int(len(inputs) / 20)
 
-            validate_boards = inputs[:validate_size]
+            validate_boards = [inputs[0][:validate_size], inputs[1][:validate_size]]
             val_pis = targetPis[:validate_size]
             val_vs = targetVs[:validate_size]
 
-            inputs = inputs[validate_size:]
+            inputs = [inputs[0][validate_size:], inputs[1][validate_size:]]
 
             target_pis = targetPis[validate_size:]
 

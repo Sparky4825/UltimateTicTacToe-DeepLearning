@@ -46,6 +46,7 @@ cdef extern from "include/MonteCarlo.h":
         vector[int] canonicalBoard
         float result
         vector[float] pi
+        vector[int] validMoves
 
     cdef cppclass MCTS:
         MCTS()
@@ -55,6 +56,7 @@ cdef extern from "include/MonteCarlo.h":
         void backpropagate(Node *finalNode, float result)
 
         vector[int] searchPreNN()
+        vector[int] getAllPossibleMovesVector()
 
         void searchPostNN(vector[float] policy, float v)
 
@@ -77,6 +79,7 @@ cdef extern from "include/BatchManager.h":
         int workerID
         vector[float] evaluations
         vector[vector[float]] pis
+        vector[vector[int]] validMoves
 
     cdef cppclass BatchManager:
         BatchManager()

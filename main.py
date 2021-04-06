@@ -31,7 +31,7 @@ args = dotdict(
         "maxlenOfQueue": 1000000,  # Number of game examples to train the neural networks.
         "pastTrainingIterations": 2,
         "numMCTSSims": 800,  # Number of games moves for MCTS to simulate.
-        "arenaCompare": 200,  # Number of games to play during arena play to determine if new net will be accepted.
+        "arenaCompare": 2,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 4,
         "checkpoint": "./temp/",
         # 'load_model': False,
@@ -42,7 +42,7 @@ args = dotdict(
         "numCPUForMCTS": 4,  # The number of Ray actors to use to add boards to be predicted.
         "CPUBatchSize": 256,
         "GPUBatchSize": 1,
-        "skipFirstSelfPlay": False,
+        "skipFirstSelfPlay": True,
         "dir_a": 0.8,
         "dir_x": 0.5,
     }

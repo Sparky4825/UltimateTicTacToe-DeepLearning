@@ -854,13 +854,14 @@ using namespace std;
                 canonical[miniboardIndex * 22 + 18] = 1;
             }
 
+            else if (boardStatus == 3) {
+                canonical[miniboardIndex * 22 + 20] = 1;
+            }
+
             else if (boardStatus == 2 / toMove) {
                 canonical[miniboardIndex * 22 + 19] = 1;
             }
 
-            else if (boardStatus == 3) {
-                canonical[miniboardIndex * 22 + 20] = 1;
-            }
 
             // Mark if this board is legal to move in
             if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
@@ -934,13 +935,14 @@ using namespace std;
                 canonical[miniboardIndex * 22 + 18] = 1;
             }
 
+            else if (boardStatus == 3) {
+                canonical[miniboardIndex * 22 + 20] = 1;
+            }
+
             else if (boardStatus == 2 / toMove) {
                 canonical[miniboardIndex * 22 + 19] = 1;
             }
 
-            else if (boardStatus == 3) {
-                canonical[miniboardIndex * 22 + 20] = 1;
-            }
 
             // Mark if this board is legal to move in
             if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {

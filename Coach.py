@@ -550,6 +550,8 @@ class Coach:
                 ep.takeAction(action)
                 ep2.takeAction(action)
 
+                print(ep.gameToString())
+                print(pi)
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:
@@ -721,6 +723,7 @@ class Coach:
             self.args.cpuct,
             self.args.dir_a,
             self.args.dir_x,
+            self.args.q_percent,
         )
 
     def learnIterations(self):

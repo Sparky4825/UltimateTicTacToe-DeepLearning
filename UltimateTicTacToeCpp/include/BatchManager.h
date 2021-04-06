@@ -16,6 +16,7 @@ using namespace std;
 #define DIRICHLET_DEFAULT_A         0.8
 #define DIRICHLET_DEFAULT_X         0.5
 #define PERCENT_Q_IN_TRAINING       0.5
+#define TEMP_THRESHOLD              25
 
 
 struct batch {
@@ -103,6 +104,8 @@ void simple();
 
 float RandomFloat(float a, float b);
 int RandomActionWeighted(vector<float> weights);
+
+int MaxAction(vector<float> weights);
 
 /**
  * Add the newEx into the running average for Pi and Result for exisiting.

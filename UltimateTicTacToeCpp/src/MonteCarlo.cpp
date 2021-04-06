@@ -60,15 +60,14 @@ void MCTS::startNewSearch(GameState position) {
 }
 
 void MCTS::backpropagate(Node *finalNode, float result) {
-    currentNode = finalNode->parent;
 
     while (currentNode != NULL) {
         if (currentNode->board.getToMove() == 1) {
-            currentNode->w += result;
+            currentNode->w += result * -1;
         }
 
         else {
-            currentNode->w += result * -1;
+            currentNode->w += result;
         }
 
         currentNode = currentNode->parent;
@@ -175,7 +174,7 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
         }
     }
 
-    backpropagate(currentNode, v);
+    backpropagate(currentNode, -1 * v);
 }
 
 vector<float> MCTS::getActionProb() {

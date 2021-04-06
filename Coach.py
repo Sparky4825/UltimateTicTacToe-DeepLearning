@@ -793,8 +793,18 @@ class Coach:
 
             winNew1, winOld1, draw1 = self.runArenaInline(new_weights, previous_weights)
 
+            log.info(
+                "ROUND 1 NEW/PREV WINS : %d / %d ; DRAWS : %d"
+                % (winNew1, winOld1, draw1)
+            )
+
             log.info("Starting Arena Round 2")
             winOld2, winNew2, draw2 = self.runArenaInline(previous_weights, new_weights)
+
+            log.info(
+                "ROUND 2 NEW/PREV WINS : %d / %d ; DRAWS : %d"
+                % (winNew2, winOld2, draw2)
+            )
 
             pwins = winOld1 + winOld2
             nwins = winNew1 + winNew2

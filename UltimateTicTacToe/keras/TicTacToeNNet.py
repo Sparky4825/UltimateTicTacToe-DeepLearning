@@ -92,7 +92,7 @@ def get_model(game, args):
     )
     from keras.optimizers import Adam
 
-    num_filters = 250
+    num_filters = 100
 
     # game params
     board_x, board_y, board_z = game.getBoardSize()

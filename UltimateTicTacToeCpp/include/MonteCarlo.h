@@ -64,6 +64,11 @@ class MCTS {
         bool evaluationNeeded;
 
         vector<float> getActionProb();
+        vector<float> getQProb();
+        vector<float> getPProb();
+        vector<float> getVProb();
+
+
         void takeAction(int actionIndex);
         int getStatus();
         void displayGame();

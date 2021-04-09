@@ -54,6 +54,13 @@ cdef class PyGameState:
     def is_valid_move(self, board, piece):
         return bool(self.c_gamestate.isValidMove(board, piece))
 
+def displayAsMove(a):
+    for j in range(81):
+        board = int(j / 9)
+        piece = j % 9
+        if a[j] != 0:
+            print(f"[{board}][{piece}] {a[j]}")
+
 cdef class PyMCTS:
     cdef MCTS mcts
     def __cinit__(self, cpuct, dirichlet=1, percent_q=0.5):
@@ -72,7 +79,23 @@ cdef class PyMCTS:
     def evaluationNeeded(self):
         return self.mcts.evaluationNeeded
 
-    def getActionProb(self):
+    def getActionProb(self, display_info=False):
+
+        if display_info:
+            print("=" * 10)
+            print(self.gameToString())
+            print("Pi - Final prob")
+            displayAsMove(self.mcts.getActionProb())
+            print("Q - Values after sims")
+            displayAsMove(self.mcts.getQProb())
+            print("P - Initial policy")
+            displayAsMove(self.mcts.getPProb())
+            print("V")
+            displayAsMove(self.mcts.getVProb())
+
+
+            print("\n\n")
+
         return self.mcts.getActionProb()
 
     def takeAction(self, int action):

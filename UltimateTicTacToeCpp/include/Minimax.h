@@ -88,6 +88,8 @@ class Node{
         // N is the number of times the board was visited in a simulation
         // Na is the number of times the board was taken as an action
         int n = 0;
+
+        float v = 0;
 };
 
 struct nodeAndEval {

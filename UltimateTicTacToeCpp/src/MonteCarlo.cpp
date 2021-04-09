@@ -60,6 +60,13 @@ void MCTS::startNewSearch(GameState position) {
 }
 
 void MCTS::backpropagate(Node *finalNode, float result) {
+    if (currentNode->board.getToMove() == 1) {
+        currentNode->v = result * -1;
+    }
+
+    else {
+        currentNode->v = result;
+    }
 
     while (currentNode != NULL) {
         if (currentNode->board.getToMove() == 1) {
@@ -223,6 +230,45 @@ vector<float> MCTS::getActionProb() {
     //     result[maxActionIndex] += 1 - totalActionValue;
     // }
 
+
+    return result;
+}
+
+vector<float> MCTS::getQProb() {
+    vector<float> result(81, 0);
+
+    for (Node &action : rootNode.children) {
+        int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        result[actionIndex] = action.w / action.n;
+
+
+    }
+
+    return result;
+}
+
+vector<float> MCTS::getPProb() {
+    vector<float> result(81, 0);
+
+    for (Node &action : rootNode.children) {
+        int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        result[actionIndex] = action.p;
+
+
+    }
+
+    return result;
+}
+
+vector<float> MCTS::getVProb() {
+    vector<float> result(81, 0);
+
+    for (Node &action : rootNode.children) {
+        int actionIndex = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        result[actionIndex] = action.v;
+
+
+    }
 
     return result;
 }

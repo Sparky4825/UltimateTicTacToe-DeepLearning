@@ -521,16 +521,24 @@ class Coach:
                 needsEval = prepareBatch(p1Episodes)
 
                 pi, v = self.nnet.predict_on_batch(needsEval)
+                # print("=" * 10)
+                # display(needsEval[0][0])
+                # print(pi)
+                # print(needsEval[1][0])
+                # print(v)
                 batchResults(p1Episodes, pi, v)
             index = -1
 
             actionsTaken += 1
             print(f"Taking action {actionsTaken}")
 
+            indexesToRemove = []
+
             for ep in p1Episodes:
                 index += 1
                 ep2 = p2Episodes[index]
 
+                # If on first game, display results
                 pi = np.array(ep.getActionProb())
                 pi /= sum(pi)
 
@@ -554,15 +562,21 @@ class Coach:
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:
-                    print(f"Game over - {len(p1Episodes) - 1} remaining")
+                    print(
+                        f"Game over - {len(p1Episodes) - (len(indexesToRemove) + 1)} remaining"
+                    )
                     if status == 1:
                         results.append(1)
                     elif status == 2:
                         results.append(-1)
                     else:
                         results.append(0)
-                    p1Episodes.remove(ep)
-                    p2Episodes.remove(p2Episodes[index])
+
+                    indexesToRemove.append(index)
+
+            for index in sorted(indexesToRemove, reverse=True):
+                del p1Episodes[index]
+                del p2Episodes[index]
 
             if len(p1Episodes) == 0:
                 break
@@ -576,6 +590,9 @@ class Coach:
 
             actionsTaken += 1
             print(f"Taking action {actionsTaken}")
+
+            indexesToRemove = []
+
             for ep in p2Episodes:
                 index += 1
                 ep2 = p1Episodes[index]
@@ -596,21 +613,29 @@ class Coach:
                     # Take best action
                     action = np.argmax(pi)
 
+                # print(pi)
+                # print(ep.gameToString())
+
                 ep.takeAction(action)
                 ep2.takeAction(action)
 
                 status = ep.getStatus()
                 # Remove episode and save results when the game is over
                 if status != 0:
-                    print(f"Game over - {len(p1Episodes) - 1} remaining")
+                    print(
+                        f"Game over - {len(p1Episodes) - (len(indexesToRemove) + 1)} remaining"
+                    )
                     if status == 1:
                         results.append(1)
                     elif status == 2:
                         results.append(-1)
                     else:
                         results.append(0)
-                    p2Episodes.remove(ep)
-                    p1Episodes.remove(p1Episodes[index])
+                    indexesToRemove.append(index)
+
+            for index in sorted(indexesToRemove, reverse=True):
+                del p1Episodes[index]
+                del p2Episodes[index]
 
         return results.count(1), results.count(-1), results.count(0)
 
@@ -749,7 +774,7 @@ class Coach:
                 with open("trainingData.examples", "rb") as f:
                     inputs, pis, vs = Unpickler(f).load()
 
-            self.log.info(f"About to begin training with {len(inputs)} samples")
+            self.log.info(f"About to begin training with {len(inputs[0])} samples")
 
             # TODO: Reduce the number of draws in training examples because they confuse the network
             # Save the rng_state to shuffle each array the say way
@@ -790,7 +815,9 @@ class Coach:
 
             log.info("Starting Arena Round 1")
 
-            winNew1, winOld1, draw1 = self.runArenaInline(new_weights, previous_weights)
+            winNew1, winOld1, draw1 = self.runArenaInline(
+                previous_weights, previous_weights
+            )
 
             log.info(
                 "ROUND 1 NEW/PREV WINS : %d / %d ; DRAWS : %d"
@@ -798,7 +825,9 @@ class Coach:
             )
 
             log.info("Starting Arena Round 2")
-            winOld2, winNew2, draw2 = self.runArenaInline(previous_weights, new_weights)
+            winOld2, winNew2, draw2 = self.runArenaInline(
+                previous_weights, previous_weights
+            )
 
             log.info(
                 "ROUND 2 NEW/PREV WINS : %d / %d ; DRAWS : %d"

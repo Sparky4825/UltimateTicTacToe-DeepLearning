@@ -11,6 +11,8 @@ import numpy as np
 import math
 import sys
 
+from display import display
+
 sys.path.append("..")
 from utils import *
 from NeuralNet import NeuralNet
@@ -94,7 +96,9 @@ class NNetWrapper(NeuralNet):
             epochs = self.args.epochs
 
         if validation is None:
-            validate_size = int(len(inputs[0]) / 20)
+            validate_size = int(len(inputs[0]) * 0.8)
+
+            self.log.info(f"Validation size: {validate_size}")
 
             validate_boards = [inputs[0][:validate_size], inputs[1][:validate_size]]
             val_pis = targetPis[:validate_size]
@@ -112,6 +116,10 @@ class NNetWrapper(NeuralNet):
 
             target_pis = targetPis
             target_vs = targetVs
+
+        # for i in range(100):
+        #     display(inputs[0][i])
+        #     print(target_vs[i])
 
         self.nnet.fit(
             x=inputs,

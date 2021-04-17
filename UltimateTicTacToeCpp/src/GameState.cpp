@@ -896,6 +896,11 @@ using namespace std;
             // Mark if the board is won/lost/tied
             if (boardStatus == toMove) {
                 canonical[miniboardIndex * 22 + 18] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
             }
 
             else if (boardStatus == 3) {
@@ -904,6 +909,11 @@ using namespace std;
 
             else if (boardStatus == 2 / toMove) {
                 canonical[miniboardIndex * 22 + 19] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
             }
 
 

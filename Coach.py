@@ -14,6 +14,7 @@ from MCTS import (
     batchResults,
     runSelfPlayEpisodes,
 )
+from display import display
 
 log = logging.getLogger(__name__)
 
@@ -103,11 +104,13 @@ class Coach:
                 needsEval = prepareBatch(p1Episodes)
 
                 pi, v = self.nnet.predict_on_batch(needsEval)
-                # print("=" * 10)
-                # display(needsEval[0][0])
+                print("=" * 10)
+                display(needsEval[0][0])
                 # print(pi)
                 # print(needsEval[1][0])
-                # print(v)
+                print(v[0])
+
+                # v *= -1
                 batchResults(p1Episodes, pi, v)
             index = -1
 
@@ -167,6 +170,8 @@ class Coach:
             for _ in range(self.args.numMCTSSims):
                 needsEval = prepareBatch(p2Episodes)
                 pi, v = self.nnet.predict_on_batch(needsEval)
+
+                # v *= -1
                 batchResults(p2Episodes, pi, v)
             index = -1
 
@@ -302,9 +307,7 @@ class Coach:
 
             log.info("Starting Arena Round 1")
 
-            winNew1, winOld1, draw1 = self.runArenaInline(
-                previous_weights, previous_weights
-            )
+            winNew1, winOld1, draw1 = self.runArenaInline(new_weights, previous_weights)
 
             log.info(
                 "ROUND 1 NEW/PREV WINS : %d / %d ; DRAWS : %d"
@@ -312,9 +315,7 @@ class Coach:
             )
 
             log.info("Starting Arena Round 2")
-            winOld2, winNew2, draw2 = self.runArenaInline(
-                previous_weights, previous_weights
-            )
+            winOld2, winNew2, draw2 = self.runArenaInline(previous_weights, new_weights)
 
             log.info(
                 "ROUND 2 NEW/PREV WINS : %d / %d ; DRAWS : %d"

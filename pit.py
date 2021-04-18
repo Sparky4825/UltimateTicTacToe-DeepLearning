@@ -1,6 +1,5 @@
 import Arena
 from UltimateTicTacToe.UltimateTicTacToeGame import TicTacToeGame
-from OldMCTS import MCTS
 
 # from othello.OthelloGame import OthelloGame
 # from othello.OthelloPlayers import *
@@ -9,7 +8,7 @@ from OldMCTS import MCTS
 
 import numpy as np
 
-from UltimateTicTacToe.UltimateTicTacToePlayers import *
+# from UltimateTicTacToe.UltimateTicTacToePlayers import *
 from UltimateTicTacToe.keras.NNet import NNetWrapper
 from main import args
 
@@ -33,15 +32,6 @@ any agent.
 mini_othello = False  # Play in 6x6 instead of the normal 8x8.
 human_vs_cpu = True
 
-ray.init()
-
-g = TicTacToeGame()
-
-# all players
-rp = RandomPlayer(g).play
-# gp = GreedyOthelloPlayer(g).play
-hp = HumanTicTacToePlayer(g).play
-
 
 # nnet players
 # if mini_othello:
@@ -52,7 +42,7 @@ hp = HumanTicTacToePlayer(g).play
 #
 # n1.load_checkpoint("tictactoe\\pretrained", "best.pth.tar")
 
-modelPath = "litemodels/20210326-092010.tflite"
+# modelPath = "litemodels/20210326-092010.tflite"
 
 
 def vsHuman(args, nnet, weights):
@@ -119,7 +109,8 @@ def vsHuman(args, nnet, weights):
             status = ep.getStatus()
             # Remove episode and save results when the game is over
             if status != 0:
-                print(f"Game over - {len(p1Episodes) - 1} remaining")
+                print(ep.gameToString())
+                print(f"Game over")
                 if status == 1:
                     results.append(1)
                 elif status == 2:
@@ -162,21 +153,22 @@ def vsHuman(args, nnet, weights):
     return results.count(1), results.count(-1), results.count(0)
 
 
-with open(modelPath, "rb") as f:
-    modelContent = f.read()
+#
+# with open(modelPath, "rb") as f:
+#     modelContent = f.read()
+#
+# n1p = NNetPlayer(g, modelContent, args)
 
-n1p = NNetPlayer(g, modelContent, args)
-
-
-if human_vs_cpu:
-    player2 = hp
-else:
-    pass
+#
+# if human_vs_cpu:
+#     player2 = hp
+# else:
+#     pass
 
 model2 = ["temp", "best.ckpt"]
-model1 = ["temp", "At Work (3 accepted)\\best.ckpt"]
+# model1 = ["temp", "At Work (3 accepted)\\best.ckpt"]
 
-# model1 = None
+model1 = None
 if __name__ == "__main__":
     log = logging.getLogger(__name__)
     log.info("Loading %s...", TicTacToeGame.__name__)
@@ -184,6 +176,8 @@ if __name__ == "__main__":
 
     log.info("Loading Neural Network (Ray actor)...")
     nnet = nn(g)
+
+    # vsHuman(args, nnet, nnet.get_weights())
 
     if model1 is not None:
         log.info(
@@ -204,6 +198,8 @@ if __name__ == "__main__":
         nnet.load_checkpoint(model2[0], model2[1])
 
     new_weights = nnet.get_weights()
+
+    vsHuman(args, nnet, new_weights)
 
     log.info("Starting Arena Round 1")
 

@@ -42,7 +42,7 @@ args = dotdict(
     {
         "lr": 0.001,
         "dropout": 0.3,
-        "epochs": 5,
+        "epochs": 10,
         "batch_size": 2000,
         "cuda": True,
         "num_channels": 512,
@@ -96,7 +96,7 @@ class NNetWrapper(NeuralNet):
             epochs = self.args.epochs
 
         if validation is None:
-            validate_size = int(len(inputs[0]) * 0.8)
+            validate_size = int(len(inputs[0]) * 0.25)
 
             self.log.info(f"Validation size: {validate_size}")
 

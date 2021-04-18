@@ -104,11 +104,11 @@ class Coach:
                 needsEval = prepareBatch(p1Episodes)
 
                 pi, v = self.nnet.predict_on_batch(needsEval)
-                print("=" * 10)
-                display(needsEval[0][0])
+                # print("=" * 10)
+                # display(needsEval[0][0])
                 # print(pi)
                 # print(needsEval[1][0])
-                print(v[0])
+                # print(v[0])
 
                 # v *= -1
                 batchResults(p1Episodes, pi, v)
@@ -326,7 +326,9 @@ class Coach:
             nwins = winNew1 + winNew2
             draws = draw1 + draw2
 
-            log.info("NEW/PREV WINS : %d / %d ; DRAWS : %d" % (nwins, pwins, draws))
+            log.info(
+                f"NEW/PREV WINS : {nwins} / {pwins} ; DRAWS : {draws} | ({round(nwins / (nwins + pwins) * 100, 2)}%)"
+            )
 
             if (
                 pwins + nwins == 0

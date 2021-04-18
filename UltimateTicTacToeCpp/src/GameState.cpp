@@ -873,23 +873,7 @@ using namespace std;
 
         for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
 
-            for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
 
-                int spotStatus = getPosition(miniboardIndex, spotIndex);
-                
-
-                if (spotStatus == toMove) {
-                    canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
-                }
-
-                // If the spot belongs to the other player
-                else if (spotStatus == 2 / toMove) {
-                    canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
-                }
-
-                // Else neither owns it, zero is default
-
-            }
 
             int boardStatus = getBoardStatus(miniboardIndex);
 
@@ -913,6 +897,26 @@ using namespace std;
                 // Mark every spot
                 for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
                     canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+            }
+
+            else {
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                    int spotStatus = getPosition(miniboardIndex, spotIndex);
+                    
+
+                    if (spotStatus == toMove) {
+                        canonical[miniboardIndex * 22 + spotIndex * 2] = 1;
+                    }
+
+                    // If the spot belongs to the other player
+                    else if (spotStatus == 2 / toMove) {
+                        canonical[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                    }
+
+                    // Else neither owns it, zero is default
+
                 }
             }
 

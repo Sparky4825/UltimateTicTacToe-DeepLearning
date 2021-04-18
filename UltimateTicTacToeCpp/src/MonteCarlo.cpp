@@ -40,6 +40,8 @@ int piSymmetriesMapping[8][81] = {
 };
 
 
+random_device rd;
+
 MCTS::MCTS() {
     gen = mt19937(rd());
     dirichlet = dirichlet_distribution<mt19937>(dirichlet_a, 81);
@@ -311,6 +313,20 @@ vector<float> MCTS::getActionProb() {
 
 
     return result;
+}
+
+int MCTS::maxActionProb() {
+    int bestAction;
+    float bestValue = 0;
+
+    for (Node &action : rootNode.children) {
+        if (action.n >= bestValue) {
+            bestValue = action.n;
+            bestAction = action.board.previousMove.board * 9 + action.board.previousMove.piece;
+        }
+    }
+
+    return bestAction;
 }
 
 vector<float> MCTS::getQProb() {

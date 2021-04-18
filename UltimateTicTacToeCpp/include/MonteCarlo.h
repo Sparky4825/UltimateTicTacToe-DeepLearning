@@ -30,8 +30,6 @@ struct trainingExampleVector {
 };
 
 
-random_device rd;
-
 
 class MCTS {
     float cpuct = 1;
@@ -72,6 +70,7 @@ class MCTS {
         vector<float> getPProb();
         vector<float> getVProb();
 
+        int maxActionProb();
 
         void takeAction(int actionIndex);
         int getStatus();

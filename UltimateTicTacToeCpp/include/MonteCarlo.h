@@ -29,6 +29,7 @@ struct trainingExampleVector {
     vector<int> validMoves;
 };
 
+
 random_device rd;
 
 
@@ -60,6 +61,9 @@ class MCTS {
         vector<int> searchPreNN();
         vector<int> getAllPossibleMovesVector();
         void searchPostNN(vector<float> policy, float v);
+
+        nnInput searchPreNNforTfLite();
+        void searchPostNNTfLite(nnOutput result);
 
         bool evaluationNeeded;
 

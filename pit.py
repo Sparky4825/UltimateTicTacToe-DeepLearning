@@ -45,7 +45,7 @@ human_vs_cpu = True
 # modelPath = "litemodels/20210326-092010.tflite"
 
 
-def vsHuman(args, nnet, weights):
+def vsHuman(args, nnet, weights, humanFirst=False):
     """
     Returns in format (player1Wins, player2Wins, draws)
     :param player1Weights:
@@ -64,6 +64,21 @@ def vsHuman(args, nnet, weights):
         p2Episodes.append(PyMCTS(args.cpuct))
         g = PyGameState()
         p2Episodes[-1].startNewSearch(g)
+
+    if humanFirst:
+        ep = p1Episodes[0]
+
+        # GET USER MOVE
+        print(ep.gameToString())
+        board = int(input("Board >> "))
+        piece = int(input("Piece >> "))
+
+        action = board * 9 + piece
+        # MAKE USER MOVE
+
+        ep.takeAction(action)
+
+        print(ep.gameToString())
 
     actionsTaken = 0
 
@@ -199,7 +214,7 @@ if __name__ == "__main__":
 
     new_weights = nnet.get_weights()
 
-    vsHuman(args, nnet, new_weights)
+    vsHuman(args, nnet, new_weights, True)
 
     log.info("Starting Arena Round 1")
 

@@ -5,6 +5,17 @@ using namespace std;
 #include <vector>
 #include <iostream>
 
+
+struct nnInput {
+    float board[199] = {};
+    float valid[81] = {};
+};
+
+struct nnOutput {
+    float policy[81] = {};
+    float value = 0;
+};
+
 const bitset<20> winningPosX[] = {
     0b00000000000001010100,
     0b00000001010100000000,
@@ -91,6 +102,8 @@ class GameState {
     vector<int> getAllPossibleMovesVector();
 
     bitset<199> getCanonicalBoardBitset();
+
+    nnInput getNNInput();
     
 };
 

@@ -151,6 +151,76 @@ vector<int> MCTS::searchPreNN() {
     return currentNode->board.getCanonicalBoard();
 }
 
+nnInput MCTS::searchPreNNforTfLite() {
+        // Select a node
+    currentNode = &rootNode;
+    Node *bestAction;
+    Node *child;
+
+    // currentNode->addChildren();
+    currentNode->n++;
+
+    float bestUCB = -1 * numeric_limits<float>::max();
+    float u, q, v;
+
+    int status, i;
+
+
+    // Search until an unexplored node is found
+    while (currentNode->hasChildren) {
+
+        // Pick the action with the highest upper confidence bound
+        bestUCB = -1 * numeric_limits<float>::max();
+        for (Node &child : currentNode->children) {
+            if (child.n > 0) {
+                u = (child.w / child.n) + cpuct * child.p * (sqrt(currentNode->n) / (1 + child.n));
+            }
+            else {
+                // Always explore an unexplored node
+                bestAction = &child;
+                break;
+            }
+
+            if (u > bestUCB) {
+                bestUCB = u;
+                bestAction = &child;
+            }
+        }
+
+        currentNode = bestAction;
+        currentNode->n++;
+
+
+        status = currentNode->board.getStatus();
+
+        // If the game has ended, backpropagate the results and mark the board as visited
+        if (status != 0) {
+            if (status == 1) {
+                backpropagate(currentNode, 1);
+            }
+
+            else if (status == 2) {
+                backpropagate(currentNode, -1);
+            }
+
+            else {
+                backpropagate(currentNode, 0);
+            }
+
+            evaluationNeeded = false;
+            return nnInput();
+        }
+
+    }
+
+    // A neural network evaluation is needed
+    currentNode->addChildren();
+
+    evaluationNeeded = true;
+    return currentNode->board.getNNInput();
+
+}
+
 vector<int> MCTS::getAllPossibleMovesVector() {
     if (currentNode != NULL) {
         return currentNode->board.getAllPossibleMovesVector();
@@ -198,6 +268,15 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
 
         backpropagate(currentNode, -v);
     }
+}
+
+void MCTS::searchPostNNTfLite(nnOutput result) {
+    vector<float> policy;
+    for (int i = 0; i < 81; i++) {
+        policy.push_back(result.policy[i]);
+    }
+
+    searchPostNN(policy, result.value);
 }
 
 vector<float> MCTS::getActionProb() {

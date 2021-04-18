@@ -937,6 +937,77 @@ using namespace std;
         return result;
     }
 
+    nnInput GameState::getNNInput() {
+        nnInput result;
+
+        int toMove = getToMove();
+        int requiredBoard = getRequiredBoard();
+
+        for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+
+
+            int boardStatus = getBoardStatus(miniboardIndex);
+
+            // Mark if the board is won/lost/tied
+            if (boardStatus == toMove) {
+                result.board[miniboardIndex * 22 + 18] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    result.board[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
+            }
+
+            else if (boardStatus == 3) {
+                result.board[miniboardIndex * 22 + 20] = 1;
+            }
+
+            else if (boardStatus == 2 / toMove) {
+                result.board[miniboardIndex * 22 + 19] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    result.board[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+            }
+
+            else {
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                    int spotStatus = getPosition(miniboardIndex, spotIndex);
+                    
+
+                    if (spotStatus == toMove) {
+                        result.board[miniboardIndex * 22 + spotIndex * 2] = 1;
+                    }
+
+                    // If the spot belongs to the other player
+                    else if (spotStatus == 2 / toMove) {
+                        result.board[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                    }
+
+                    // Else neither owns it, zero is default
+
+                }
+            }
+
+
+            // Mark if this board is legal to move in
+            if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
+                result.board[miniboardIndex * 22 + 21] = 1;
+            }
+
+        }
+
+        vector<int> validMoves = getAllPossibleMovesVector();
+        for (int i = 0; i < 81; i++) {
+            result.valid[i] = validMoves[i];
+        }
+
+        return result;
+    }
+
     bitset<199> GameState::getCanonicalBoardBitset() {
         /**
          * Gets the current board in the Canonical form for

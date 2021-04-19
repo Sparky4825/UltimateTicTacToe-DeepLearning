@@ -490,6 +490,9 @@ using namespace std;
     }
 
     bool GameState::isValidMove(int board, int piece) {
+        if (getBoardStatus(board) != 0) {
+            return false;
+        }
         if (getRequiredBoard() != -1) {
             if (board == getRequiredBoard() && getPosition(board, piece) == 0)  {
                 return true;

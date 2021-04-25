@@ -103,6 +103,9 @@ class GameState {
 
     bitset<199> getCanonicalBoardBitset();
 
+    void writeCanonicalBoard(float *output);
+    void writeValidMoves(float *output);
+
     nnInput getNNInput();
     
 };

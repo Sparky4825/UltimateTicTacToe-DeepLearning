@@ -558,6 +558,48 @@ using namespace std;
 
     }
 
+    void GameState::writeValidMoves(float *target) {
+        memset(target, 0, sizeof(float) * 81);
+
+        int requiredBoard = getRequiredBoard();
+
+        // If there is a required board
+        if (requiredBoard > -1) {
+
+            // Check every spot on the required board
+            for (int i = 0; i < 9; i++) {
+                int location = 2 + (i * 2);
+
+                // If the spot is empty, add this as a move
+                if (!board[requiredBoard][location] && !board[requiredBoard][location + 1]) {
+
+                    target[requiredBoard * 9 + i] = 1;
+
+                }
+            }
+        } else {
+
+            // Loop every board
+            for (int boardIndex = 0; boardIndex < 9; boardIndex++) {
+
+                // If the game is over in this board, no moves are possible on it
+                if (getBoardStatus(boardIndex))
+                    continue;
+
+                for (int i = 0; i < 9; i++) {
+                    int location = 2 + (i * 2);
+
+                    // If the spot are empty, add this as a move
+                    if (!board[boardIndex][location] && !board[boardIndex][location + 1]) {
+                        target[boardIndex * 9 + i] = 1;
+
+                    }
+                }
+
+            }
+        }
+    }
+
     vector<int> GameState::getAllPossibleMovesVector() {
         vector<int> moves(81);
 
@@ -844,6 +886,74 @@ using namespace std;
 
         return fresult;
     };
+
+
+    void GameState::writeCanonicalBoard(float *output) {
+        memset(output, 0, sizeof(float) * 199);
+
+
+        int toMove = getToMove();
+        int requiredBoard = getRequiredBoard();
+
+        for (int miniboardIndex = 0; miniboardIndex < 9; miniboardIndex++) {
+
+
+
+            int boardStatus = getBoardStatus(miniboardIndex);
+
+            // Mark if the board is won/lost/tied
+            if (boardStatus == toMove) {
+                output[miniboardIndex * 22 + 18] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    output[miniboardIndex * 22 + spotIndex * 2] = 1;
+                }
+            }
+
+            else if (boardStatus == 3) {
+                output[miniboardIndex * 22 + 20] = 1;
+            }
+
+            else if (boardStatus == 2 / toMove) {
+                output[miniboardIndex * 22 + 19] = 1;
+
+                // Mark every spot
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+                    output[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                }
+            }
+
+            else {
+                for (int spotIndex = 0; spotIndex < 9; spotIndex++) {
+
+                    int spotStatus = getPosition(miniboardIndex, spotIndex);
+                    
+
+                    if (spotStatus == toMove) {
+                        output[miniboardIndex * 22 + spotIndex * 2] = 1;
+                    }
+
+                    // If the spot belongs to the other player
+                    else if (spotStatus == 2 / toMove) {
+                        output[miniboardIndex * 22 + spotIndex * 2 + 1] = 1;
+                    }
+
+                    // Else neither owns it, zero is default
+
+                }
+            }
+
+
+            // Mark if this board is legal to move in
+            if (boardStatus == 0 && (requiredBoard == miniboardIndex || requiredBoard == -1)) {
+                output[miniboardIndex * 22 + 21] = 1;
+            }
+
+        }
+
+    }
+
 
     vector<int> GameState::getCanonicalBoard() {
         /**

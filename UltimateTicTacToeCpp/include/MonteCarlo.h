@@ -60,8 +60,17 @@ class MCTS {
         vector<int> getAllPossibleMovesVector();
         void searchPostNN(vector<float> policy, float v);
 
-        nnInput searchPreNNforTfLite();
-        void searchPostNNTfLite(nnOutput result);
+        /**
+         * Start an iteration of the MCTS. Return true if a NN eval
+         * and searchPostNNTfLite() is needed.
+         */
+        bool searchPreNNTFLite();
+
+        /**
+         * Finish the MCTS iteration after a NN eval. Only call if
+         * necessary.
+         */
+        void searchPostNNTFLite(float *policyOutput, float *value);
 
         bool evaluationNeeded;
 
@@ -78,6 +87,9 @@ class MCTS {
         string gameToString();
 
         void saveTrainingExample(vector<float> pi, float q);
+        void saveTrainingExample();
+        void saveTrainingExample(float *pi, float *q);
+
         vector<trainingExample> getTrainingExamples(int result);
         vector<trainingExampleVector> getTrainingExamplesVector(int result);
         void purgeTrainingExamples();

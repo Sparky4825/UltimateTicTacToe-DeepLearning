@@ -152,7 +152,7 @@ vector<int> MCTS::searchPreNN() {
     return currentNode->board.getCanonicalBoard();
 }
 
-nnInput MCTS::searchPreNNforTfLite() {
+bool MCTS::searchPreNNTFLite() {
         // Select a node
     currentNode = &rootNode;
     Node *bestAction;
@@ -209,7 +209,7 @@ nnInput MCTS::searchPreNNforTfLite() {
             }
 
             evaluationNeeded = false;
-            return nnInput();
+            return false;
         }
 
     }
@@ -218,7 +218,7 @@ nnInput MCTS::searchPreNNforTfLite() {
     currentNode->addChildren();
 
     evaluationNeeded = true;
-    return currentNode->board.getNNInput();
+    return true;
 
 }
 
@@ -271,13 +271,44 @@ void MCTS::searchPostNN(vector<float> policy, float v) {
     }
 }
 
-void MCTS::searchPostNNTfLite(nnOutput result) {
-    vector<float> policy;
-    for (int i = 0; i < 81; i++) {
-        policy.push_back(result.policy[i]);
+void MCTS::searchPostNNTFLite(float *policyOutput, float *valueOutput) {
+    int validAction, index, i;
+    float totalValidMoves = 0;
+    int numValidMoves = 0;
+    Node *child;
+
+    // Save policy value
+    // Normalize policy values based on which moves are valid
+    for (Node &child : currentNode->children) {
+        validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece;
+
+        totalValidMoves += policyOutput[validAction];
+        numValidMoves++;
     }
 
-    searchPostNN(policy, result.value);
+    if (totalValidMoves > 0) {
+        // Renormalize the values of all valid moves
+        for (Node &child: currentNode->children) {
+            validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece;
+            child.p = policyOutput[validAction] / totalValidMoves;
+        }
+    } else {
+        // All valid moves were masked, doing a workaround
+        for (Node &child: currentNode->children) {
+            validAction = child.board.previousMove.board * 9 + child.board.previousMove.piece;
+            child.p = 1 / numValidMoves;
+            cout << "Warning :: All valid moves masked, all valued equal.\n";
+        }
+    }
+
+    if (currentNode->board.getToMove() == 1) {
+
+        backpropagate(currentNode, *valueOutput);
+    }
+    else {
+
+        backpropagate(currentNode, -1 * (*valueOutput));
+    }
 }
 
 vector<float> MCTS::getActionProb() {
@@ -394,6 +425,10 @@ string MCTS::gameToString() {
     return rootNode.board.gameToString();
 }
 
+void MCTS::saveTrainingExample() {
+    saveTrainingExample(getActionProb(), rootNode.w / rootNode.n);
+}
+
 void MCTS::saveTrainingExample(vector<float> pi, float q) {
     /**
      * Saves the position in the root node to the list of training examples.
@@ -421,6 +456,31 @@ void MCTS::saveTrainingExample(vector<float> pi, float q) {
     }
 
     trainingPositions.push_back(newPosition);
+}
+
+void MCTS::saveTrainingExample(float *pi, float *q) {
+    trainingExample newPosition;
+
+    newPosition.canonicalBoard = rootNode.board.getCanonicalBoardBitset();
+    newPosition.validMoves = rootNode.board.getAllPossibleMovesVector();
+
+    // Copy the training data
+    memcpy(&newPosition.pi, pi, sizeof(float) * 81);
+
+    // Negative because Q values are stored from the perspective of taking the action from
+    // the parents perspective. (ie the value to the current player is the opposite)
+    newPosition.q = -1 * *q;
+
+    // Save which player is to move; This will later be multiplied by the result of the game
+    // to get the result for the current player
+    if (rootNode.board.getToMove() == 1) {
+        newPosition.result = 1;
+    } else {
+        newPosition.result = -1;
+    }
+
+    trainingPositions.push_back(newPosition);
+
 }
 
 vector<trainingExample> MCTS::getTrainingExamples(int result) {

@@ -449,3 +449,9 @@ void BatchManager::purgeHistory(int iterationsToSave) {
         resultsHistory.pop_back();
     }
 }
+
+
+
+void BatchManager::runSelfPlay(string modelPath, int epCount) {
+    
+}

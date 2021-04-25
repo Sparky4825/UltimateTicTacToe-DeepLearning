@@ -27,3 +27,5 @@ logs/
 *.log
 
 boost_1_75_0/
+
+*.examples

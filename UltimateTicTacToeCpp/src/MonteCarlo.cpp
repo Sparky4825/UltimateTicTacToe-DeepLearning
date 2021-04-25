@@ -58,7 +58,6 @@ MCTS::MCTS(float _cpuct, double _dirichlet, float _percent_q) {
 
 void MCTS::startNewSearch(GameState position) {
     rootNode = Node(position, 0);
-    rootNode.addChildren();
 }
 
 void MCTS::backpropagate(Node *finalNode, float result) {

@@ -7,6 +7,7 @@ using namespace std;
 #include <MonteCarlo.h>
 #include <random>
 #include <fstream>
+#include <string>
 
 #define CPUCT_DEFAULT               4
 
@@ -96,6 +97,11 @@ public:
      * Saves all of the training examples to the history and clears the current results list.
      */
     void saveTrainingExampleHistory();
+
+    /**
+     * Runs a number of self-play episodes using the given TFLite Model.
+     */
+    void runSelfPlay(string modelPath, int epCount);
 
 };
 

@@ -87,11 +87,13 @@ def vsHuman(args, nnet, weights, humanFirst=False):
         overallStart = time.time()
 
         nnet.set_weights(weights)
-        for _ in range(2000):
+        for _ in range(200):
             # print("Stargin simulation")
             needsEval = prepareBatch(p1Episodes)
 
             pi, v = nnet.predict_on_batch(needsEval)
+
+            print(v)
             batchResults(p1Episodes, pi, v)
         index = -1
 

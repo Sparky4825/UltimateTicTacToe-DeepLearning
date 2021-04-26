@@ -36,6 +36,8 @@ cdef extern from "include/GameState.h":
         int isValidMove(int, int)
 
 
+        string gameToString()
+        
         vector[int] getCanonicalBoard()
         vector[int] getBoardBitset()
 

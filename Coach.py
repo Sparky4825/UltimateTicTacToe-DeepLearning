@@ -14,6 +14,8 @@ from MCTS import (
     batchResults,
     runSelfPlayEpisodes,
 )
+
+from SelfPlay import runSelfPlayEpisodesBatch
 from display import display
 
 log = logging.getLogger(__name__)
@@ -238,6 +240,22 @@ class Coach:
             self.args.dir_x,
             self.args.q_percent,
         )
+
+    def testRunEpisodesCpp(self):
+        return runSelfPlayEpisodes(
+            self.nnet.predict_on_batch,
+            500,
+            1,
+            200,
+            self.args.pastTrainingIterations,
+            self.args.cpuct,
+            self.args.dir_a,
+            self.args.dir_x,
+            self.args.q_percent,
+        )
+
+    def runEpisodesBatch(self):
+        return runSelfPlayEpisodesBatch(self.nnet.predict_on_batch, 500, 200)
 
     def learnIterations(self):
         """

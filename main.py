@@ -127,5 +127,46 @@ def main():
     c.learnIterations()
 
 
+def test_SelfPlay():
+    log.info("Loading %s...", UTicTacToe.TicTacToeGame.__name__)
+    g = UTicTacToe.TicTacToeGame()
+
+    log.info("Loading Neural Network (Ray actor)...")
+    nnet = NNetWrapper(g)
+
+    if args.load_model:
+        log.info(
+            'Loading checkpoint "%s/%s"...',
+            args.load_folder_file[0],
+            args.load_folder_file[1],
+        )
+        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
+
+    else:
+        log.warning("Not loading a checkpoint!")
+
+    log.info("Loading the Coach...")
+    c = Coach(g, nnet, args)
+
+    if args.load_model:
+        log.info("Loading 'trainExamples' from file...")
+        c.loadTrainExamples()
+
+    log.info("Starting the learning process")
+    import time
+
+    start = time.time()
+    c.runEpisodesBatch()
+    end = time.time()
+
+    print(f"Execution of new way took {end - start} seconds")
+
+    start = time.time()
+    c.testRunEpisodesCpp()
+    end = time.time()
+
+    print(f"Execution of old way took {end - start} seconds")
+
+
 if __name__ == "__main__":
-    main()
+    test_SelfPlay()

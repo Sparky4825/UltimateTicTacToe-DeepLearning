@@ -153,6 +153,13 @@ class NNetWrapper(NeuralNet):
         return [prediction_results[0][0], prediction_results[1][0]]
 
     def predict_on_batch(self, batch):
+        # import time
+        #
+        # start = time.time()
+        # a = self.nnet.predict_on_batch(batch)
+        # end = time.time()
+        #
+        # print(f"Evaluation of batch took {end - start} seconds")
         return self.nnet.predict_on_batch(batch)
 
     def predict_batch(self, batch):

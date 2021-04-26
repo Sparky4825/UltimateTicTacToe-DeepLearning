@@ -1,5 +1,6 @@
 from libcpp.vector cimport vector
 from libcpp cimport bool as boolean
+from libcpp.string cimport string
 
 cdef extern from "src/Minimax.cpp":
     pass
@@ -33,6 +34,12 @@ cdef extern from "include/GameState.h":
 
         boardCoords previousMove
 
+        void writeCanonicalBoard(float *output);
+        void writeValidMoves(float *output);
+
+        string gameToString()
+
+
     cdef GameState boardVector2GameState(vector[int] board)
 
 
@@ -53,6 +60,7 @@ cdef extern from "include/Minimax.h":
         float w, p
 
         boolean hasChildren
+
 
 
     cdef boardCoords minimaxSearchMove(GameState, int, bool)

@@ -62,6 +62,8 @@ cdef extern from "include/MonteCarlo.h":
 
         Node rootNode
 
+        Node *currentNode
+
         vector[double] dir(double, int)
 
         void startNewSearch(GameState position)

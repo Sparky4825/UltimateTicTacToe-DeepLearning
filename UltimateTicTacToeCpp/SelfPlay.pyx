@@ -9,7 +9,6 @@ cimport numpy as np
 from cython.operator cimport dereference as deref
 from cython.operator cimport preincrement
 
-
 from libcpp.vector cimport vector
 from libcpp.list cimport list as cpplist
 from libcpp.unordered_map cimport unordered_map
@@ -49,6 +48,13 @@ def runSelfPlayEpisodesBatch(evaluate, int batchSize = 500, int sims=50, float c
 
     actionsTaken = 0
 
+    # Create numpy arrays for boards to be written to
+    boards = np.zeros((nnSize, 199), dtype=np.float32)
+    valids = np.zeros((nnSize, 81), dtype=np.float32)
+
+    boardsView = boards
+    validsView = valids
+
     while episodes.size() > 0:
         
         # All of the MCTS sims
@@ -61,36 +67,15 @@ def runSelfPlayEpisodesBatch(evaluate, int batchSize = 500, int sims=50, float c
 
                 # Check if NN is needed
                 if deref(it).searchPreNNTFLite():
+                    deref(deref(it).currentNode).board.writeCanonicalBoard(&boardsView[nnSize, 0])
+                    deref(deref(it).currentNode).board.writeValidMoves(&validsView[nnSize, 0])
                     nnSize += 1
 
                 # Advance to the next episode
                 preincrement(it)
 
-            # Create numpy arrays for boards to be written to
-            boards = np.zeros((nnSize, 199), dtype=np.float32)
-            valids = np.zeros((nnSize, 81), dtype=np.float32)
-
-            boardsView = boards
-            validsView = valids
-
-            it = episodes.begin()
-            index = 0
-
-            while it != episodes.end():
-
-                # Check if NN is needed
-                if deref(it).evaluationNeeded:
-                    deref(deref(it).currentNode).board.writeCanonicalBoard(&boardsView[index, 0])
-                    deref(deref(it).currentNode).board.writeValidMoves(&validsView[index, 0])
-
-                    index += 1
-
-
-                # Advance to the next episode
-                preincrement(it)
-
             # Perform NN evaluation
-            pi, v = evaluate((boards, valids))
+            pi, v = evaluate((boards[:nnSize], valids[:nnSize]))
 
             # Get view to results
             piView = pi
@@ -165,10 +150,6 @@ def runSelfPlayEpisodesBatch(evaluate, int batchSize = 500, int sims=50, float c
             else:
                 # Advance to the next episode
                 preincrement(it)
-            
-
-            
-
 
 
 def runSelfPlayEpisodes(modelPath, int sims=50, float cpuct=1, double dirA=0.8, double dirX=0.5, float percentQ=1, int tempThreshold=8):
@@ -179,7 +160,7 @@ def runSelfPlayEpisodes(modelPath, int sims=50, float cpuct=1, double dirA=0.8, 
 
     tree.startNewSearch(GameState())
 
-    cdef int actionsTaken = 0;
+    cdef int actionsTaken = 0
 
     interpreter = tf.lite.Interpreter(modelPath)
 
@@ -257,10 +238,9 @@ def runSelfPlayEpisodes(modelPath, int sims=50, float cpuct=1, double dirA=0.8, 
 
         print(tree.gameToString().decode("ascii"))
 
-
         if actionsTaken < tempThreshold:
             # Add dirichlet noise
-            numActions = tree.rootNode.children.size();
+            numActions = tree.rootNode.children.size()
 
             dir = tree.dir(dirA, numActions)
 
@@ -286,6 +266,4 @@ def runSelfPlayEpisodes(modelPath, int sims=50, float cpuct=1, double dirA=0.8, 
                 status = -1
             else:
                 status = 1
-
-
             return
